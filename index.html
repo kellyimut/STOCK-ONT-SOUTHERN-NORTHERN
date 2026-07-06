@@ -175,7 +175,11 @@
     font-weight:600;
   }
   .panel.telkom thead th{ background:var(--panel-a); }
-  thead tr:nth-child(1) th{ filter:brightness(0.85); font-size:13px; }
+  thead tr:nth-child(1) th{ font-size:14px; letter-spacing:1px; padding:7px 8px; }
+  thead tr:nth-child(2) th{ font-size:12px; filter:brightness(0.94); }
+  thead tr:nth-child(3) th{ font-size:11px; filter:brightness(0.88); }
+  thead tr:nth-child(4) th{ font-size:10.5px; filter:brightness(0.82); }
+  thead tr:nth-child(5) th{ font-size:10px; filter:brightness(0.76); }
   .col-header{ text-align:left; }
   tbody td.label-witel{ font-weight:700; text-align:left; }
   tbody td.label-wh{ text-align:left; }
@@ -451,10 +455,50 @@ function sumRows(rows){
   return total;
 }
 
+function buildHeaderHtml(brandLabel){
+  return `
+    <thead>
+      <tr>
+        <th class="col-header" rowspan="5">WITEL</th>
+        <th class="col-header" rowspan="5">WAREHOUSE</th>
+        <th colspan="24">${brandLabel}</th>
+      </tr>
+      <tr>
+        <th colspan="19">ONT</th>
+        <th colspan="3">STB</th>
+        <th rowspan="4">KARTU<br>PERDANA</th>
+        <th rowspan="4">ADD ON</th>
+      </tr>
+      <tr>
+        <th colspan="7">PREMIUM</th>
+        <th colspan="7">DUAL BAND</th>
+        <th colspan="5">SINGLE BAND</th>
+        <th colspan="3">ZTE</th>
+      </tr>
+      <tr>
+        <th colspan="2">ZTE</th><th colspan="2">HUAWEI</th><th colspan="2">FIBERHOME</th><th rowspan="2">TOTAL</th>
+        <th colspan="2">ZTE</th><th colspan="2">HUAWEI</th><th colspan="2">FIBERHOME</th><th rowspan="2">TOTAL</th>
+        <th>ZTE</th><th>HUAWEI</th><th>FIBERHOME</th><th>NOKIA</th><th rowspan="2">TOTAL</th>
+        <th rowspan="2">NEW</th><th rowspan="2">REFURBISH</th><th rowspan="2">TOTAL</th>
+      </tr>
+      <tr>
+        <th>NEW</th><th>REFURBISH</th>
+        <th>NEW</th><th>REFURBISH</th>
+        <th>NEW</th><th>REFURBISH</th>
+        <th>NEW</th><th>REFURBISH</th>
+        <th>NEW</th><th>REFURBISH</th>
+        <th>NEW</th><th>REFURBISH</th>
+        <th>REFURBISH</th><th>REFURBISH</th><th>REFURBISH</th><th>REFURBISH</th>
+      </tr>
+    </thead>`;
+}
+
 function renderBrandTable(brand, wrapId){
   const filtered = applyFilters(rawData[brand].map(r=>({...r,_brand:brand})));
 
   const wrap = document.getElementById(wrapId);
+  const brandLabel = brand === "Telkomsel" ? "TELKOMSEL" : "TELKOM";
+
   if (filtered.length === 0){
     wrap.innerHTML = '<div class="empty-state">Tidak ada data untuk kombinasi filter ini.</div>';
     return;
@@ -491,11 +535,7 @@ function renderBrandTable(brand, wrapId){
 
   wrap.innerHTML = `
     <table>
-      <thead>
-        <tr><th class="col-header">WITEL</th><th class="col-header">WAREHOUSE</th>
-          ${COLUMNS.map(c=>`<th>${c.group}<br><span style="font-weight:400;font-size:10px">${c.sub}</span></th>`).join("")}
-        </tr>
-      </thead>
+      ${buildHeaderHtml(brandLabel)}
       <tbody>${bodyHtml}</tbody>
     </table>`;
 }
