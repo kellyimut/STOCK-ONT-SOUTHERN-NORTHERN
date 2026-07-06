@@ -265,13 +265,17 @@
 <script>
 /* =========================================================================
    KONFIGURASI SUMBER DATA
-   Ganti dua URL di bawah ini dengan link "Publish to web" (format CSV)
-   dari Google Sheets Anda: satu untuk tab Telkomsel, satu untuk tab Telkom.
-   Cara mendapatkan link: File > Share > Publish to web > pilih sheet > CSV
+   SHEET_ID = ID spreadsheet kamu (diambil dari link edit)
+   Tiap brand butuh GID (nomor sheet) masing-masing tab:
+   - Buka tab "REKAP TELKOMSEL" atau "REKAP TELKOM" di Google Sheets,
+     lihat URL di address bar -> ...#gid=XXXXXXXXX -> salin angka itu.
+   - REKAP TELKOMSEL sudah diketahui gid=0 (tab pertama).
+   - REKAP TELKOM: ganti GANTI_GID_TELKOM di bawah dengan angka gid tab tsb.
    ========================================================================= */
+const SHEET_ID = "1JhpcG0gGsiXJcvPMSdBPEL_r86JCsZIMqtSZR2onvwE";
 const SHEET_URLS = {
-  Telkomsel: "REPLACE_WITH_TELKOMSEL_CSV_URL",
-  Telkom: "REPLACE_WITH_TELKOM_CSV_URL"
+  Telkomsel: `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=0`,
+  Telkom: `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=GANTI_GID_TELKOM`
 };
 
 // Kolom metrik, urutan harus sama persis dengan header di spreadsheet
@@ -303,6 +307,109 @@ const COLUMNS = [
 ];
 
 const MONTH_NAMES = ["Januari","Februari","Maret","April","Mei","Juni","Juli","Agustus","September","Oktober","November","Desember"];
+const BULAN_ID = {
+  "januari":1,"februari":2,"maret":3,"april":4,"mei":5,"juni":6,
+  "juli":7,"agustus":8,"september":9,"oktober":10,"november":11,"desember":12
+};
+
+// Ubah "6 Juli 2026" -> "2026-07-06" (biar cocok dengan filter Tahun/Bulan/Hari)
+function parseIndoDateToISO(str){
+  if (!str) return null;
+  const parts = String(str).trim().split(/\s+/);
+  if (parts.length !== 3) return null;
+  const d = parseInt(parts[0], 10);
+  const m = BULAN_ID[parts[1].toLowerCase()];
+  const y = parts[2];
+  if (!d || !m || !y) return null;
+  return `${y}-${String(m).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+}
+
+/* =========================================================================
+   AGREGASI DATA MENTAH (RAW / TRANSAKSIONAL) DARI SHEET REKAP
+   Struktur kolom sheet mentah (tanpa header, indeks 0-based):
+   0 REG2 | 1 BRANCH(=Witel) | 2 WH SO INV(=Warehouse) | 3 STATUS STOCK
+   4 ITEM GROUP | 5 JENIS | 6 BRAND | 7 TYPE | 8 JUMLAH NTE
+   9 TANGGAL UPDATE | 10 KETERANGAN | 11 KET
+
+   Hanya STATUS STOCK = NEW / REFURBISH yang dihitung (DISMANTLING diabaikan,
+   karena tidak termasuk stok aktif pada tabel laporan).
+   ========================================================================= */
+function emptyPivotRow(witel, wh){
+  const row = { Witel: witel, Warehouse: wh, Tanggal: null };
+  COLUMNS.forEach(c => { if (!c.key.endsWith("_total")) row[c.key] = 0; });
+  return row;
+}
+
+function aggregateRawRows(rawRows){
+  const map = {};
+
+  rawRows.forEach(cols => {
+    if (!cols || cols.length < 9) return;
+    const branch = (cols[1] || "").trim();
+    const wh = (cols[2] || "").trim();
+    const status = (cols[3] || "").trim().toUpperCase();
+    const itemGroup = (cols[4] || "").trim().toUpperCase();
+    const jenis = (cols[5] || "").trim().toUpperCase();
+    const brand = (cols[6] || "").trim().toUpperCase();
+    const qty = parseFloat(cols[8]) || 0;
+    const tglIso = parseIndoDateToISO(cols[9]);
+
+    if (!branch || !wh) return;
+    if (status !== "NEW" && status !== "REFURBISH") return; // skip DISMANTLING & lainnya
+
+    const rowKey = branch + "|||" + wh;
+    if (!map[rowKey]) map[rowKey] = emptyPivotRow(branch, wh);
+    const target = map[rowKey];
+    if (tglIso) target.Tanggal = tglIso; // pakai tanggal update terakhir yang ditemukan
+
+    const isNew = status === "NEW";
+
+    if (itemGroup === "ONT"){
+      let cat = null;
+      if (jenis.indexOf("PREMIUM") !== -1) cat = "premium";
+      else if (jenis.indexOf("DUAL BAND") !== -1) cat = "dualband";
+      else if (jenis.indexOf("SINGLE BAND") !== -1) cat = "singleband";
+      if (!cat) return;
+
+      let brandKey = null;
+      if (brand === "ZTE") brandKey = "zte";
+      else if (brand === "HUAWEI") brandKey = "huawei";
+      else if (brand === "FIBERHOME") brandKey = "fh";
+      else if (brand === "NOKIA") brandKey = "nokia";
+      if (!brandKey) return;
+
+      // SINGLE BAND di tabel laporan cuma punya kolom REFURBISH,
+      // jadi NEW + REFURBISH digabung ke kolom itu supaya angka tidak hilang.
+      const key = (cat === "singleband")
+        ? `singleband_ref_${brandKey}`
+        : `${cat}_${isNew ? "new" : "ref"}_${brandKey}`;
+      if (key in target) target[key] += qty;
+
+    } else if (itemGroup === "STB"){
+      // Semua brand STB (ZTE/FIBERHOME/dll) digabung ke kolom STB ZTE
+      // karena tabel laporan cuma punya satu set kolom STB.
+      const key = `stb_${isNew ? "new" : "ref"}_zte`;
+      target[key] += qty;
+
+    } else if (itemGroup === "KARTU PERDANA"){
+      target.kartu_perdana += qty;
+
+    } else if (itemGroup === "ADD ON"){
+      target.add_on += qty;
+    }
+  });
+
+  return Object.values(map).map(row => {
+    row.premium_total = row.premium_new_zte + row.premium_ref_zte + row.premium_new_huawei
+      + row.premium_ref_huawei + row.premium_new_fh + row.premium_ref_fh;
+    row.dualband_total = row.dualband_new_zte + row.dualband_ref_zte + row.dualband_new_huawei
+      + row.dualband_ref_huawei + row.dualband_new_fh + row.dualband_ref_fh;
+    row.singleband_total = row.singleband_ref_zte + row.singleband_ref_huawei
+      + row.singleband_ref_fh + row.singleband_ref_nokia;
+    row.stb_total = row.stb_new_zte + row.stb_ref_zte;
+    return row;
+  });
+}
 
 /* =========================================================================
    DATA CONTOH (dipakai kalau SHEET_URLS belum diisi / gagal fetch)
@@ -337,7 +444,7 @@ async function fetchSheet(url){
   return new Promise((resolve, reject) => {
     Papa.parse(url, {
       download: true,
-      header: true,
+      header: false,
       skipEmptyLines: true,
       complete: (res) => resolve(res.data),
       error: (err) => reject(err)
@@ -352,18 +459,16 @@ async function loadAllData(){
 
   for (const brand of ["Telkomsel","Telkom"]){
     const url = SHEET_URLS[brand];
-    if (!url || url.startsWith("REPLACE_WITH")){
+    if (!url || url.includes("GANTI_GID")){
       rawData[brand] = buildDemoRows(brand === "Telkomsel" ? 1 : 0.7);
       usedDemo = true;
       continue;
     }
     try{
-      const rows = await fetchSheet(url);
-      rawData[brand] = rows.map(r => {
-        const clean = {...r};
-        COLUMNS.forEach(c => { clean[c.key] = Number(clean[c.key]) || 0; });
-        return clean;
-      });
+      const rawRows = await fetchSheet(url);
+      // baris pertama = header kolom, dilewati; sisanya diagregasi dari data mentah
+      const dataRows = rawRows.slice(1);
+      rawData[brand] = aggregateRawRows(dataRows);
     }catch(e){
       document.getElementById("errorBox").innerHTML =
         `<div class="error-state">Gagal mengambil data ${brand} dari Google Sheets. Menampilkan data contoh sementara. (${e})</div>`;
@@ -377,7 +482,7 @@ async function loadAllData(){
     note.className = "error-state";
     note.style.background = "#fff6da";
     note.style.color = "#7a5c00";
-    note.textContent = "Menampilkan DATA CONTOH karena link Google Sheets belum dipasang. Kirim link publish-to-web CSV Anda untuk data live.";
+    note.textContent = "Menampilkan DATA CONTOH karena GID sheet REKAP TELKOM belum diisi. Ganti GANTI_GID_TELKOM di kode dengan gid tab REKAP TELKOM.";
     document.getElementById("errorBox").appendChild(note);
   }
 
