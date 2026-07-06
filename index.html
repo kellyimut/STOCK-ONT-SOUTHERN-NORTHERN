@@ -366,6 +366,12 @@ function parseIndoDateToISO(str){
    Hanya STATUS STOCK = NEW / REFURBISH yang dihitung (DISMANTLING diabaikan,
    karena tidak termasuk stok aktif pada tabel laporan).
    ========================================================================= */
+// Rapikan spasi berlebih di nama Witel/Warehouse (mis. "JAKARTA  TIMUR" -> "JAKARTA TIMUR")
+// supaya tidak gagal cocok dengan dropdown filter hanya gara-gara beda spasi.
+function normSpace(str){
+  return String(str || "").trim().replace(/\s+/g, " ");
+}
+
 function emptyPivotRow(cols, witel, wh){
   const row = { Witel: witel, Warehouse: wh, Tanggal: null };
   cols.forEach(c => { if (!c.key.endsWith("_total")) row[c.key] = 0; });
@@ -377,24 +383,24 @@ function aggregateTelkomselRaw(rawRows){
 
   rawRows.forEach(cols => {
     if (!cols || cols.length < 9) return;
-    const branch = (cols[1] || "").trim();
-    const wh = (cols[2] || "").trim();
-    const status = (cols[3] || "").trim().toUpperCase();
+    const branch = normSpace(cols[1]);
+    const wh = normSpace(cols[2]);
+    const statusKey = normalisasiStatus(cols[3]);
     const itemGroup = (cols[4] || "").trim().toUpperCase();
     const jenis = (cols[5] || "").trim().toUpperCase();
     const brand = (cols[6] || "").trim().toUpperCase();
     const qty = parseFloat(cols[8]) || 0;
-    const tglIso = parseIndoDateToISO(cols[9]);
+    const tglIso = parseFleksibelTanggal(cols[9]);
 
     if (!branch || !wh) return;
-    if (status !== "NEW" && status !== "REFURBISH") return; // skip DISMANTLING & lainnya
+    if (!statusKey) return; // skip DISMANTLING & status lain yg tidak dikenal
 
     const rowKey = branch + "|||" + wh;
     if (!map[rowKey]) map[rowKey] = emptyPivotRow(TELKOMSEL_COLUMNS, branch, wh);
     const target = map[rowKey];
     if (tglIso) target.Tanggal = tglIso; // pakai tanggal update terakhir yang ditemukan
 
-    const isNew = status === "NEW";
+    const isNew = statusKey === "new";
 
     if (itemGroup === "ONT"){
       let cat = null;
@@ -445,42 +451,85 @@ function aggregateTelkomselRaw(rawRows){
 
 /* =========================================================================
    AGREGASI DATA MENTAH KHUSUS TELKOM
-   Kategori ONT: PREMIUM / RETAIL / BIG ONT, brand ZTE/HUAWEI/FIBERHOME (semua
-   punya NEW & REFURBISH). STB tetap digabung ke satu kolom ZTE.
-   Kolom terakhir: ACCESS POINT (ITEM GROUP="ACCESS POINT") & ADD ON.
-   Catatan: kalau nama ITEM GROUP/JENIS di sheet REKAP TELKOM ternyata beda
-   dari asumsi ini, kasih tahu supaya pemetaannya disesuaikan.
+
+   PENTING: sheet REKAP TELKOM ternyata punya struktur kolom BEDA dari
+   REKAP TELKOMSEL. Berdasarkan screenshot yang dikirim, urutannya:
+   0 REGION | 1 BRANCH(=Witel) | 2 NAMA WH(=Warehouse) | 3 STATUS STOCK
+   4 JENIS (nilai: ONT / STB / ADD ON / AP / AKSESORIS AP -- ini yg jadi
+     kategori utama, beda dari REKAP TELKOMSEL yg punya ITEM GROUP terpisah)
+   5 MERK (brand: ZTE/HUAWEI/FIBERHOME/POE/HKM/dst)
+   6 TYPE (kode produk, mis. "ONT_ZTE_F670_V2.0", "WMSL_ONT_FIBERHOME_...")
+   7 JUMLAH NTE (qty)
+   8 KETERANGAN
+   9 TANGGAL (format campur: "07-Jul-26" atau "7 Juli 2026")
+
+   STATUS STOCK di sheet ini pakai istilah "NTE BARU" (=NEW) dan
+   "REFURBISHED" (=REFURBISH), bukan "NEW"/"REFURBISH" polos.
+
+   BELUM PASTI: cara membedakan ONT PREMIUM vs RETAIL vs BIG ONT.
+   Sheet ini TIDAK punya kolom terpisah untuk itu (JENIS cuma "ONT" polos).
+   Sementara semua ONT dianggap RETAIL supaya angka tidak hilang -- perlu
+   dikonfirmasi ke pemilik data bagaimana cara membedakan ketiganya
+   (misalnya lewat kode awalan di TYPE seperti "WMSL_").
    ========================================================================= */
+const MONTH_ABBR_EN = { jan:1, feb:2, mar:3, apr:4, may:5, jun:6, jul:7, aug:8, sep:9, oct:10, nov:11, dec:12 };
+
+// Coba beberapa format tanggal yang ditemukan di sheet: "7 Juli 2026" atau "07-Jul-26"
+function parseFleksibelTanggal(str){
+  if (!str) return null;
+  const s = String(str).trim();
+
+  const iso1 = parseIndoDateToISO(s); // "7 Juli 2026"
+  if (iso1) return iso1;
+
+  const m = s.match(/^(\d{1,2})-([A-Za-z]{3})-(\d{2,4})$/); // "07-Jul-26"
+  if (m){
+    const d = parseInt(m[1],10);
+    const mon = MONTH_ABBR_EN[m[2].toLowerCase()];
+    let y = parseInt(m[3],10);
+    if (y < 100) y += 2000;
+    if (d && mon) return `${y}-${String(mon).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+  }
+  return null;
+}
+
+// "NEW"/"NTE BARU" -> new, "REFURBISH"/"REFURBISHED" -> refurbish, selain itu (DISMANTLING dll) diabaikan
+function normalisasiStatus(raw){
+  const s = (raw || "").trim().toUpperCase();
+  if (s === "NEW" || s === "NTE BARU" || s === "BARU") return "new";
+  if (s === "REFURBISH" || s === "REFURBISHED") return "refurbish";
+  return null;
+}
+
 function aggregateTelkomRaw(rawRows){
   const map = {};
 
   rawRows.forEach(cols => {
-    if (!cols || cols.length < 9) return;
-    const branch = (cols[1] || "").trim();
-    const wh = (cols[2] || "").trim();
-    const status = (cols[3] || "").trim().toUpperCase();
-    const itemGroup = (cols[4] || "").trim().toUpperCase();
-    const jenis = (cols[5] || "").trim().toUpperCase();
-    const brand = (cols[6] || "").trim().toUpperCase();
-    const qty = parseFloat(cols[8]) || 0;
-    const tglIso = parseIndoDateToISO(cols[9]);
+    if (!cols || cols.length < 8) return;
+    const branch = normSpace(cols[1]);
+    const wh = normSpace(cols[2]);
+    const statusKey = normalisasiStatus(cols[3]);
+    const jenis = (cols[4] || "").trim().toUpperCase();   // ONT / STB / ADD ON / AP / AKSESORIS AP
+    const brand = (cols[5] || "").trim().toUpperCase();   // MERK
+    const type = (cols[6] || "").trim().toUpperCase();    // TYPE
+    const qty = parseFloat(cols[7]) || 0;                 // JUMLAH NTE
+    const tglIso = parseFleksibelTanggal(cols[9]);
 
     if (!branch || !wh) return;
-    if (status !== "NEW" && status !== "REFURBISH") return; // skip DISMANTLING & lainnya
+    if (!statusKey) return; // skip DISMANTLING & status lain yg tidak dikenal
 
     const rowKey = branch + "|||" + wh;
     if (!map[rowKey]) map[rowKey] = emptyPivotRow(TELKOM_COLUMNS, branch, wh);
     const target = map[rowKey];
     if (tglIso) target.Tanggal = tglIso;
 
-    const isNew = status === "NEW";
+    const isNew = statusKey === "new";
 
-    if (itemGroup === "ONT"){
-      let cat = null;
-      if (jenis.indexOf("BIG ONT") !== -1 || jenis.indexOf("BIGONT") !== -1) cat = "bigont";
-      else if (jenis.indexOf("RETAIL") !== -1) cat = "retail";
-      else if (jenis.indexOf("PREMIUM") !== -1) cat = "premium";
-      if (!cat) return;
+    if (jenis === "ONT"){
+      // TODO: bedakan PREMIUM/RETAIL/BIG ONT kalau sudah dikonfirmasi aturannya.
+      // Sementara semua ONT masuk RETAIL supaya angkanya tidak hilang.
+      let cat = "retail";
+      if (type.indexOf("WMSL") !== -1) cat = "bigont";
 
       let brandKey = null;
       if (brand === "ZTE") brandKey = "zte";
@@ -491,14 +540,14 @@ function aggregateTelkomRaw(rawRows){
       const key = `${cat}_${isNew ? "new" : "ref"}_${brandKey}`;
       if (key in target) target[key] += qty;
 
-    } else if (itemGroup === "STB"){
+    } else if (jenis === "STB"){
       const key = `stb_${isNew ? "new" : "ref"}_zte`;
       target[key] += qty;
 
-    } else if (itemGroup === "ACCESS POINT"){
+    } else if (jenis === "AP" || jenis === "AKSESORIS AP"){
       target.access_point += qty;
 
-    } else if (itemGroup === "ADD ON"){
+    } else if (jenis === "ADD ON"){
       target.add_on += qty;
     }
   });
@@ -753,7 +802,7 @@ function renderBrandTable(brand, wrapId){
   const brandLabel = brand === "Telkomsel" ? "TELKOMSEL" : "TELKOM";
 
   if (filtered.length === 0){
-    wrap.innerHTML = '<div class="empty-state">Tidak ada data untuk kombinasi filter ini.</div>';
+    wrap.innerHTML = '<div class="empty-state">Tidak ada data untuk kombinasi filter ini. Kemungkinan sheet ini memang belum punya baris data untuk Witel/Warehouse yang dipilih.</div>';
     return;
   }
 
