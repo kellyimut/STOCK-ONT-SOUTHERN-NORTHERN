@@ -116,12 +116,13 @@
     text-transform:uppercase;
     letter-spacing:.4px;
   }
-  .filter-group select{
+  .filter-group select, .filter-group input[type="text"]{
     padding:7px 10px;
     border:1px solid #ccc;
     border-radius:4px;
     font-size:13px;
-    min-width:130px;
+    min-width:160px;
+    font-family:inherit;
   }
   .reset-btn{
     background:#e5e7eb;
@@ -263,24 +264,37 @@
 
 <div class="filter-bar">
   <div class="filter-group">
+    <label>Stok ONT</label>
+    <input type="text" id="filterBrand" list="filterBrandList" placeholder="Semua" autocomplete="off">
+    <datalist id="filterBrandList">
+      <option value="TELKOMSEL"></option>
+      <option value="TELKOM"></option>
+    </datalist>
+  </div>
+  <div class="filter-group">
     <label>Witel</label>
-    <select id="filterWitel"><option value="">Semua</option></select>
+    <input type="text" id="filterWitel" list="filterWitelList" placeholder="Semua" autocomplete="off">
+    <datalist id="filterWitelList"></datalist>
   </div>
   <div class="filter-group">
     <label>Tahun</label>
-    <select id="filterTahun"><option value="">Semua</option></select>
+    <input type="text" id="filterTahun" list="filterTahunList" placeholder="Semua" autocomplete="off">
+    <datalist id="filterTahunList"></datalist>
   </div>
   <div class="filter-group">
     <label>Bulan</label>
-    <select id="filterBulan"><option value="">Semua</option></select>
+    <input type="text" id="filterBulan" list="filterBulanList" placeholder="Semua" autocomplete="off">
+    <datalist id="filterBulanList"></datalist>
   </div>
   <div class="filter-group">
     <label>Hari / Tanggal</label>
-    <select id="filterHari"><option value="">Semua</option></select>
+    <input type="text" id="filterHari" list="filterHariList" placeholder="Semua" autocomplete="off">
+    <datalist id="filterHariList"></datalist>
   </div>
   <div class="filter-group">
     <label>Warehouse</label>
-    <select id="filterWarehouse"><option value="">Semua</option></select>
+    <input type="text" id="filterWarehouse" list="filterWarehouseList" placeholder="Semua" autocomplete="off">
+    <datalist id="filterWarehouseList"></datalist>
   </div>
   <button class="reset-btn" id="resetBtn">Reset Filter</button>
 </div>
@@ -753,38 +767,41 @@ function populateFilters(){
     if (r.Warehouse) warehouses.add(r.Warehouse);
   });
 
-  fillSelect("filterTahun", [...years].sort(), v => v);
-  fillSelect("filterBulan", [...months].sort((a,b)=>a-b), v => MONTH_NAMES[v-1]);
-  fillSelect("filterHari", [...days].sort((a,b)=>a-b), v => String(v).padStart(2,"0"));
-  fillSelect("filterWitel", [...witels].sort(), v => v);
-  fillSelect("filterWarehouse", [...warehouses].sort(), v => v);
+  fillDatalist("filterTahunList", [...years].sort(), v => String(v));
+  fillDatalist("filterBulanList", [...months].sort((a,b)=>a-b), v => MONTH_NAMES[v-1]);
+  fillDatalist("filterHariList", [...days].sort((a,b)=>a-b), v => String(v).padStart(2,"0"));
+  fillDatalist("filterWitelList", [...witels].sort(), v => v);
+  fillDatalist("filterWarehouseList", [...warehouses].sort(), v => v);
 }
 
-function fillSelect(id, values, labelFn){
-  const sel = document.getElementById(id);
-  const current = sel.value;
-  sel.innerHTML = '<option value="">Semua</option>';
+function fillDatalist(listId, values, labelFn){
+  const dl = document.getElementById(listId);
+  dl.innerHTML = "";
   values.forEach(v => {
     const opt = document.createElement("option");
-    opt.value = v;
-    opt.textContent = labelFn(v);
-    sel.appendChild(opt);
+    opt.value = labelFn(v);
+    dl.appendChild(opt);
   });
-  if (values.map(String).includes(current)) sel.value = current;
 }
 
 function applyFilters(rows){
-  const tahun = document.getElementById("filterTahun").value;
-  const bulan = document.getElementById("filterBulan").value;
-  const hari = document.getElementById("filterHari").value;
-  const witel = document.getElementById("filterWitel").value;
-  const warehouse = document.getElementById("filterWarehouse").value;
+  const tahun = document.getElementById("filterTahun").value.trim();
+  const bulanText = document.getElementById("filterBulan").value.trim();
+  const hariText = document.getElementById("filterHari").value.trim();
+  const witel = document.getElementById("filterWitel").value.trim();
+  const warehouse = document.getElementById("filterWarehouse").value.trim();
+
+  // "Bulan" & "Hari" diketik sebagai teks (mis. "Juli", "07") -> ubah balik ke angka utk dibandingkan
+  const bulanIdx = bulanText
+    ? MONTH_NAMES.findIndex(m => m.toLowerCase() === bulanText.toLowerCase()) + 1
+    : 0;
+  const hariNum = hariText ? parseInt(hariText, 10) : 0;
 
   return rows.filter(r => {
     const dt = parseDate(r.Tanggal);
-    if (tahun && (!dt || dt.y !== tahun)) return false;
-    if (bulan && (!dt || dt.m !== parseInt(bulan,10))) return false;
-    if (hari && (!dt || dt.d !== parseInt(hari,10))) return false;
+    if (tahun && (!dt || String(dt.y) !== tahun)) return false;
+    if (bulanIdx && (!dt || dt.m !== bulanIdx)) return false;
+    if (hariNum && (!dt || dt.d !== hariNum)) return false;
     if (witel && r.Witel !== witel) return false;
     if (warehouse && r.Warehouse !== warehouse) return false;
     return true;
@@ -879,8 +896,20 @@ function renderBrandCards(brand, wrapId){
 }
 
 function renderAll(){
-  renderBrandCards("Telkomsel", "wrapTelkomsel");
-  renderBrandCards("Telkom", "wrapTelkom");
+  const brandText = document.getElementById("filterBrand").value.trim().toUpperCase();
+  const brandFilter = brandText === "TELKOMSEL" ? "Telkomsel" : brandText === "TELKOM" ? "Telkom" : "";
+
+  const panelTelkomsel = document.querySelector(".panel.telkomsel");
+  const panelTelkom = document.querySelector(".panel.telkom");
+
+  const showTelkomsel = !brandFilter || brandFilter === "Telkomsel";
+  const showTelkom = !brandFilter || brandFilter === "Telkom";
+
+  panelTelkomsel.style.display = showTelkomsel ? "" : "none";
+  panelTelkom.style.display = showTelkom ? "" : "none";
+
+  if (showTelkomsel) renderBrandCards("Telkomsel", "wrapTelkomsel");
+  if (showTelkom) renderBrandCards("Telkom", "wrapTelkom");
 }
 
 /* =========================================================================
@@ -935,11 +964,13 @@ initThemePicker();
 
 document.getElementById("refreshBtn").addEventListener("click", loadAllData);
 document.getElementById("resetBtn").addEventListener("click", () => {
-  ["filterTahun","filterBulan","filterHari","filterWitel","filterWarehouse"].forEach(id => document.getElementById(id).value = "");
+  ["filterBrand","filterTahun","filterBulan","filterHari","filterWitel","filterWarehouse"].forEach(id => document.getElementById(id).value = "");
   renderAll();
 });
-["filterTahun","filterBulan","filterHari","filterWitel","filterWarehouse"].forEach(id => {
-  document.getElementById(id).addEventListener("change", renderAll);
+["filterBrand","filterTahun","filterBulan","filterHari","filterWitel","filterWarehouse"].forEach(id => {
+  const el = document.getElementById(id);
+  el.addEventListener("input", renderAll);
+  el.addEventListener("change", renderAll);
 });
 
 loadAllData();
