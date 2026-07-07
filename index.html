@@ -524,13 +524,19 @@ function normalisasiStatus(raw){
 }
 
 // Petakan teks kolom KATEGORI ke salah satu bucket ONT: premium/retail/bigont
+// Berdasarkan daftar lengkap 36 nilai unik KATEGORI yang dikonfirmasi pemilik data.
+// Tidak ada kategori literal "RETAIL" -- istilah DUAL BAND/SINGLE BAND (lama)
+// dipetakan ke RETAIL, sudah dikonfirmasi cocok dgn angka laporan Excel.
+const KATEGORI_PREMIUM = ["ONT PREMIUM","ONT PREMIUM WMSL","PREMIUM","PREMIUM WMSL"];
+const KATEGORI_BIGONT = ["BIG ONT","ONT WMSL","ONT ENTERPRISE"];
+const KATEGORI_RETAIL = ["ONT DUAL BAND","DUAL BAND","DUAL BAND VULA","ONT SINGLE BAND",
+  "ONT SINGLEBAND","SINGLE BAND NOT OPEN","SINGLE BAND OPEN","ONT VULLA","ONT MOBILE"];
+
 function petakanKategoriOnt(kategori){
-  const k = (kategori || "").toUpperCase();
-  if (k.indexOf("PREMIUM") !== -1) return "premium";
-  if (k.indexOf("BIG ONT") !== -1 || k.indexOf("BIGONT") !== -1) return "bigont";
-  if (k.indexOf("RETAIL") !== -1) return "retail";
-  // Belum ada kepastian pemetaan utk istilah lama ini -> sementara ke RETAIL
-  if (k.indexOf("DUAL BAND") !== -1 || k.indexOf("SINGLE BAND") !== -1) return "retail";
+  const k = normSpace(kategori).toUpperCase();
+  if (KATEGORI_PREMIUM.indexOf(k) !== -1) return "premium";
+  if (KATEGORI_BIGONT.indexOf(k) !== -1) return "bigont";
+  if (KATEGORI_RETAIL.indexOf(k) !== -1) return "retail";
   return null;
 }
 
@@ -585,12 +591,13 @@ function aggregateTelkomRaw(rawRows){
       const key = `stb_${isNew ? "new" : "ref"}_zte`;
       target[key] += r.qty;
 
-    } else if (r.jenis === "AP" || r.jenis === "AKSESORIS AP" || r.kategori === "ACC AP"){
+    } else if (r.jenis === "ACCESS POINT"){
       target.access_point += r.qty;
 
-    } else if (r.jenis === "ADD ON" || r.kategori === "ADD ON"){
+    } else if (r.jenis === "ADD ON"){
       target.add_on += r.qty;
     }
+    // JENIS lain (AKSESORIS AP, SFP, L2SW, INDIBOX, dll) di luar cakupan tabel ini -> diabaikan
   });
 
   return Object.values(map).map(row => {
