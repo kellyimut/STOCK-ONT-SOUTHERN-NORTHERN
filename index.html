@@ -378,10 +378,26 @@ function emptyPivotRow(cols, witel, wh){
   return row;
 }
 
-function aggregateTelkomselRaw(rawRows){
-  const map = {};
+// Ambil hanya update TERAKHIR per (Witel+Warehouse+Jenis+Brand+Type+Status),
+// supaya baris yg berulang/di-update banyak kali tidak ikut kehitung dobel.
+function dedupLatestPerType(records){
+  const best = {};
+  records.forEach(r => {
+    const cur = best[r.uniqueKey];
+    if (!cur){ best[r.uniqueKey] = r; return; }
+    const curScore = cur.tglIso || "";
+    const newScore = r.tglIso || "";
+    if (newScore > curScore || (newScore === curScore && r.idx > cur.idx)){
+      best[r.uniqueKey] = r;
+    }
+  });
+  return Object.values(best);
+}
 
-  rawRows.forEach(cols => {
+function aggregateTelkomselRaw(rawRows){
+  // Fase 1: parse & siapkan kunci dedup
+  const records = [];
+  rawRows.forEach((cols, idx) => {
     if (!cols || cols.length < 9) return;
     const branch = normSpace(cols[1]);
     const wh = normSpace(cols[2]);
@@ -389,31 +405,42 @@ function aggregateTelkomselRaw(rawRows){
     const itemGroup = (cols[4] || "").trim().toUpperCase();
     const jenis = (cols[5] || "").trim().toUpperCase();
     const brand = (cols[6] || "").trim().toUpperCase();
+    const type = (cols[7] || "").trim().toUpperCase();
     const qty = parseFloat(cols[8]) || 0;
     const tglIso = parseFleksibelTanggal(cols[9]);
 
     if (!branch || !wh) return;
     if (!statusKey) return; // skip DISMANTLING & status lain yg tidak dikenal
 
-    const rowKey = branch + "|||" + wh;
-    if (!map[rowKey]) map[rowKey] = emptyPivotRow(TELKOMSEL_COLUMNS, branch, wh);
+    const uniqueKey = [branch, wh, itemGroup, jenis, brand, type, statusKey].join("|||");
+    records.push({ idx, branch, wh, statusKey, itemGroup, jenis, brand, qty, tglIso, uniqueKey });
+  });
+
+  // Fase 2: dedup -- ambil update terbaru per kombinasi unik
+  const deduped = dedupLatestPerType(records);
+
+  // Fase 3: agregasi ke pivot
+  const map = {};
+  deduped.forEach(r => {
+    const rowKey = r.branch + "|||" + r.wh;
+    if (!map[rowKey]) map[rowKey] = emptyPivotRow(TELKOMSEL_COLUMNS, r.branch, r.wh);
     const target = map[rowKey];
-    if (tglIso) target.Tanggal = tglIso; // pakai tanggal update terakhir yang ditemukan
+    if (r.tglIso) target.Tanggal = r.tglIso;
 
-    const isNew = statusKey === "new";
+    const isNew = r.statusKey === "new";
 
-    if (itemGroup === "ONT"){
+    if (r.itemGroup === "ONT"){
       let cat = null;
-      if (jenis.indexOf("PREMIUM") !== -1) cat = "premium";
-      else if (jenis.indexOf("DUAL BAND") !== -1) cat = "dualband";
-      else if (jenis.indexOf("SINGLE BAND") !== -1) cat = "singleband";
+      if (r.jenis.indexOf("PREMIUM") !== -1) cat = "premium";
+      else if (r.jenis.indexOf("DUAL BAND") !== -1) cat = "dualband";
+      else if (r.jenis.indexOf("SINGLE BAND") !== -1) cat = "singleband";
       if (!cat) return;
 
       let brandKey = null;
-      if (brand === "ZTE") brandKey = "zte";
-      else if (brand === "HUAWEI") brandKey = "huawei";
-      else if (brand === "FIBERHOME") brandKey = "fh";
-      else if (brand === "NOKIA") brandKey = "nokia";
+      if (r.brand === "ZTE") brandKey = "zte";
+      else if (r.brand === "HUAWEI") brandKey = "huawei";
+      else if (r.brand === "FIBERHOME") brandKey = "fh";
+      else if (r.brand === "NOKIA") brandKey = "nokia";
       if (!brandKey) return;
 
       // SINGLE BAND di tabel laporan cuma punya kolom REFURBISH,
@@ -421,19 +448,19 @@ function aggregateTelkomselRaw(rawRows){
       const key = (cat === "singleband")
         ? `singleband_ref_${brandKey}`
         : `${cat}_${isNew ? "new" : "ref"}_${brandKey}`;
-      if (key in target) target[key] += qty;
+      if (key in target) target[key] += r.qty;
 
-    } else if (itemGroup === "STB"){
+    } else if (r.itemGroup === "STB"){
       // Semua brand STB (ZTE/FIBERHOME/dll) digabung ke kolom STB ZTE
       // karena tabel laporan cuma punya satu set kolom STB.
       const key = `stb_${isNew ? "new" : "ref"}_zte`;
-      target[key] += qty;
+      target[key] += r.qty;
 
-    } else if (itemGroup === "KARTU PERDANA"){
-      target.kartu_perdana += qty;
+    } else if (r.itemGroup === "KARTU PERDANA"){
+      target.kartu_perdana += r.qty;
 
-    } else if (itemGroup === "ADD ON"){
-      target.add_on += qty;
+    } else if (r.itemGroup === "ADD ON"){
+      target.add_on += r.qty;
     }
   });
 
@@ -508,15 +535,15 @@ function petakanKategoriOnt(kategori){
 }
 
 function aggregateTelkomRaw(rawRows){
-  const map = {};
-
-  rawRows.forEach(cols => {
+  const records = [];
+  rawRows.forEach((cols, idx) => {
     if (!cols || cols.length < 12) return;
     const branch = normSpace(cols[1]);
     const wh = normSpace(cols[2]);
     const statusKey = normalisasiStatus(cols[3]);
     const jenis = (cols[4] || "").trim().toUpperCase();     // ONT / STB / ADD ON / AP / AKSESORIS AP
     const brand = (cols[5] || "").trim().toUpperCase();     // MERK
+    const type = (cols[6] || "").trim().toUpperCase();      // TYPE
     const qty = parseFloat(cols[7]) || 0;                   // JUMLAH NTE
     const tglIso = parseFleksibelTanggal(cols[9]);
     const kategori = (cols[11] || "").trim().toUpperCase(); // KATEGORI
@@ -524,35 +551,45 @@ function aggregateTelkomRaw(rawRows){
     if (!branch || !wh) return;
     if (!statusKey) return; // skip DISMANTLING & status lain yg tidak dikenal
 
-    const rowKey = branch + "|||" + wh;
-    if (!map[rowKey]) map[rowKey] = emptyPivotRow(TELKOM_COLUMNS, branch, wh);
+    const uniqueKey = [branch, wh, jenis, brand, type, kategori, statusKey].join("|||");
+    records.push({ idx, branch, wh, statusKey, jenis, brand, type, qty, tglIso, kategori, uniqueKey });
+  });
+
+  // Dedup -- ambil update terbaru per kombinasi Warehouse+Jenis+Brand+Type+Status,
+  // supaya baris yg berulang/di-update banyak kali tidak ikut kehitung dobel.
+  const deduped = dedupLatestPerType(records);
+
+  const map = {};
+  deduped.forEach(r => {
+    const rowKey = r.branch + "|||" + r.wh;
+    if (!map[rowKey]) map[rowKey] = emptyPivotRow(TELKOM_COLUMNS, r.branch, r.wh);
     const target = map[rowKey];
-    if (tglIso) target.Tanggal = tglIso;
+    if (r.tglIso) target.Tanggal = r.tglIso;
 
-    const isNew = statusKey === "new";
+    const isNew = r.statusKey === "new";
 
-    if (jenis === "ONT"){
-      const cat = petakanKategoriOnt(kategori);
+    if (r.jenis === "ONT"){
+      const cat = petakanKategoriOnt(r.kategori);
       if (!cat) return; // KATEGORI tidak dikenali, lewati
 
       let brandKey = null;
-      if (brand === "ZTE") brandKey = "zte";
-      else if (brand === "HUAWEI") brandKey = "huawei";
-      else if (brand === "FIBERHOME") brandKey = "fh";
+      if (r.brand === "ZTE") brandKey = "zte";
+      else if (r.brand === "HUAWEI") brandKey = "huawei";
+      else if (r.brand === "FIBERHOME") brandKey = "fh";
       if (!brandKey) return; // brand di luar ZTE/HUAWEI/FIBERHOME diabaikan utk TELKOM
 
       const key = `${cat}_${isNew ? "new" : "ref"}_${brandKey}`;
-      if (key in target) target[key] += qty;
+      if (key in target) target[key] += r.qty;
 
-    } else if (jenis === "STB"){
+    } else if (r.jenis === "STB"){
       const key = `stb_${isNew ? "new" : "ref"}_zte`;
-      target[key] += qty;
+      target[key] += r.qty;
 
-    } else if (jenis === "AP" || jenis === "AKSESORIS AP" || kategori === "ACC AP"){
-      target.access_point += qty;
+    } else if (r.jenis === "AP" || r.jenis === "AKSESORIS AP" || r.kategori === "ACC AP"){
+      target.access_point += r.qty;
 
-    } else if (jenis === "ADD ON" || kategori === "ADD ON"){
-      target.add_on += qty;
+    } else if (r.jenis === "ADD ON" || r.kategori === "ADD ON"){
+      target.add_on += r.qty;
     }
   });
 
