@@ -151,42 +151,76 @@
   }
   .panel.telkom .panel-title{ background:var(--panel-a); }
   .table-wrap{
-    overflow-x:auto;
-    background:white;
-    border-radius:0 0 8px 8px;
-    box-shadow:0 2px 10px rgba(0,0,0,0.08);
+    padding:2px 2px 14px 2px;
     min-height:80px;
   }
-  table{
-    border-collapse:collapse;
-    width:100%;
-    min-width:1400px;
+  .witel-section{ margin-bottom:22px; }
+  .witel-heading{
+    font-size:13px;
+    font-weight:800;
+    color:var(--navy-dark);
+    text-transform:uppercase;
+    letter-spacing:.5px;
+    margin:0 0 10px 2px;
+  }
+  .panel.telkom .witel-heading{ color:var(--panel-a); }
+  .card-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fill, minmax(200px, 1fr));
+    gap:12px;
+  }
+  .stat-card{
+    background:white;
+    border-radius:10px;
+    box-shadow:0 2px 8px rgba(0,0,0,0.08);
+    padding:12px 14px;
+    border-left:4px solid var(--navy);
+  }
+  .panel.telkom .stat-card{ border-left-color:var(--panel-a); }
+  .stat-card-title{
     font-size:12px;
-  }
-  th, td{
-    border:1px solid var(--border);
-    padding:5px 8px;
-    text-align:center;
+    font-weight:700;
+    margin-bottom:8px;
     white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
   }
-  thead th{
-    background:var(--navy);
+  .stat-tiles{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:8px 10px;
+  }
+  .stat-tile{ display:flex; flex-direction:column; gap:1px; }
+  .stat-label{
+    font-size:9px;
+    font-weight:700;
+    color:#888;
+    text-transform:uppercase;
+    letter-spacing:.3px;
+  }
+  .stat-value{
+    font-size:15px;
+    font-weight:700;
+    color:var(--navy-dark);
+    font-variant-numeric:tabular-nums;
+  }
+  .stat-card.total-card{ background:var(--total-row); border-left-color:var(--navy-dark); }
+  .stat-card.total-card .stat-card-title{ font-weight:800; }
+  .grand-total-card{
+    margin-top:6px;
+    background:var(--grand-total);
     color:white;
-    font-weight:600;
+    border-radius:10px;
+    padding:14px 16px;
+    box-shadow:0 2px 10px rgba(0,0,0,0.1);
   }
-  .panel.telkom thead th{ background:var(--panel-a); }
-  thead tr:nth-child(1) th{ font-size:14px; letter-spacing:1px; padding:7px 8px; }
-  thead tr:nth-child(2) th{ font-size:12px; filter:brightness(0.94); }
-  thead tr:nth-child(3) th{ font-size:11px; filter:brightness(0.88); }
-  thead tr:nth-child(4) th{ font-size:10.5px; filter:brightness(0.82); }
-  thead tr:nth-child(5) th{ font-size:10px; filter:brightness(0.76); }
-  .col-header{ text-align:left; }
-  tbody td.label-witel{ font-weight:700; text-align:left; }
-  tbody td.label-wh{ text-align:left; }
-  tr.witel-row td{ background:#fbe4d5; }
-  tr.witel-row.alt td{ background:#e2efda; }
-  tr.total-region td{ background:var(--total-row); font-weight:700; }
-  tr.grand-total td{ background:var(--grand-total); color:white; font-weight:700; }
+  .grand-total-card .stat-card-title{ color:white; font-size:14px; }
+  .grand-total-card .stat-label{ color:#e4ecf7; }
+  .grand-total-card .stat-value{ color:white; }
+  .grand-total-card .stat-tiles{ grid-template-columns:repeat(6, 1fr); }
+  @media (max-width: 700px){
+    .grand-total-card .stat-tiles{ grid-template-columns:repeat(2, 1fr); }
+  }
   td.num{ font-variant-numeric:tabular-nums; }
   .empty-state{
     padding:30px;
@@ -764,90 +798,39 @@ function sumRows(rows, cols){
   return total;
 }
 
-function buildHeaderHtmlTelkomsel(brandLabel){
-  return `
-    <thead>
-      <tr>
-        <th class="col-header" rowspan="5">WITEL</th>
-        <th class="col-header" rowspan="5">WAREHOUSE</th>
-        <th colspan="24">${brandLabel}</th>
-      </tr>
-      <tr>
-        <th colspan="19">ONT</th>
-        <th colspan="3">STB</th>
-        <th rowspan="4">KARTU<br>PERDANA</th>
-        <th rowspan="4">ADD ON</th>
-      </tr>
-      <tr>
-        <th colspan="7">PREMIUM</th>
-        <th colspan="7">DUAL BAND</th>
-        <th colspan="5">SINGLE BAND</th>
-        <th colspan="3">ZTE</th>
-      </tr>
-      <tr>
-        <th colspan="2">ZTE</th><th colspan="2">HUAWEI</th><th colspan="2">FIBERHOME</th><th rowspan="2">TOTAL</th>
-        <th colspan="2">ZTE</th><th colspan="2">HUAWEI</th><th colspan="2">FIBERHOME</th><th rowspan="2">TOTAL</th>
-        <th>ZTE</th><th>HUAWEI</th><th>FIBERHOME</th><th>NOKIA</th><th rowspan="2">TOTAL</th>
-        <th rowspan="2">NEW</th><th rowspan="2">REFURBISH</th><th rowspan="2">TOTAL</th>
-      </tr>
-      <tr>
-        <th>NEW</th><th>REFURBISH</th>
-        <th>NEW</th><th>REFURBISH</th>
-        <th>NEW</th><th>REFURBISH</th>
-        <th>NEW</th><th>REFURBISH</th>
-        <th>NEW</th><th>REFURBISH</th>
-        <th>NEW</th><th>REFURBISH</th>
-        <th>REFURBISH</th><th>REFURBISH</th><th>REFURBISH</th><th>REFURBISH</th>
-      </tr>
-    </thead>`;
+// Kolom ringkas yang ditampilkan di tiap card (cuma angka TOTAL per kategori)
+const TELKOMSEL_SUMMARY = [
+  { key: "premium_total", label: "PREMIUM" },
+  { key: "dualband_total", label: "DUAL BAND" },
+  { key: "singleband_total", label: "SINGLE BAND" },
+  { key: "stb_total", label: "STB" },
+  { key: "kartu_perdana", label: "KARTU PERDANA" },
+  { key: "add_on", label: "ADD ON" }
+];
+const TELKOM_SUMMARY = [
+  { key: "premium_total", label: "PREMIUM" },
+  { key: "retail_total", label: "RETAIL" },
+  { key: "bigont_total", label: "BIG ONT" },
+  { key: "stb_total", label: "STB" },
+  { key: "access_point", label: "ACCESS POINT" },
+  { key: "add_on", label: "ADD ON" }
+];
+const SUMMARY_CONFIG = { Telkomsel: TELKOMSEL_SUMMARY, Telkom: TELKOM_SUMMARY };
+
+function buildStatTilesHtml(summaryCols, dataObj){
+  return summaryCols.map(c => `
+    <div class="stat-tile">
+      <div class="stat-label">${c.label}</div>
+      <div class="stat-value">${dataObj[c.key] || 0}</div>
+    </div>`).join("");
 }
 
-function buildHeaderHtmlTelkom(brandLabel){
-  return `
-    <thead>
-      <tr>
-        <th class="col-header" rowspan="5">WITEL</th>
-        <th class="col-header" rowspan="5">WAREHOUSE</th>
-        <th colspan="26">${brandLabel}</th>
-      </tr>
-      <tr>
-        <th colspan="21">ONT</th>
-        <th colspan="3">STB</th>
-        <th rowspan="4">ACCESS<br>POINT</th>
-        <th rowspan="4">ADD ON</th>
-      </tr>
-      <tr>
-        <th colspan="7">PREMIUM</th>
-        <th colspan="7">RETAIL</th>
-        <th colspan="7">BIG ONT</th>
-        <th colspan="3">ZTE</th>
-      </tr>
-      <tr>
-        <th colspan="2">ZTE</th><th colspan="2">HUAWEI</th><th colspan="2">FIBERHOME</th><th rowspan="2">TOTAL</th>
-        <th colspan="2">ZTE</th><th colspan="2">HUAWEI</th><th colspan="2">FIBERHOME</th><th rowspan="2">TOTAL</th>
-        <th colspan="2">ZTE</th><th colspan="2">HUAWEI</th><th colspan="2">FIBERHOME</th><th rowspan="2">TOTAL</th>
-        <th rowspan="2">NEW</th><th rowspan="2">REFURBISH</th><th rowspan="2">TOTAL</th>
-      </tr>
-      <tr>
-        <th>NEW</th><th>REFURBISH</th>
-        <th>NEW</th><th>REFURBISH</th>
-        <th>NEW</th><th>REFURBISH</th>
-        <th>NEW</th><th>REFURBISH</th>
-        <th>NEW</th><th>REFURBISH</th>
-        <th>NEW</th><th>REFURBISH</th>
-        <th>NEW</th><th>REFURBISH</th>
-        <th>NEW</th><th>REFURBISH</th>
-        <th>NEW</th><th>REFURBISH</th>
-      </tr>
-    </thead>`;
-}
-
-function renderBrandTable(brand, wrapId){
+function renderBrandCards(brand, wrapId){
   const cols = COLUMN_CONFIG[brand];
+  const summaryCols = SUMMARY_CONFIG[brand];
   const filtered = applyFilters(rawData[brand].map(r=>({...r,_brand:brand})));
 
   const wrap = document.getElementById(wrapId);
-  const brandLabel = brand === "Telkomsel" ? "TELKOMSEL" : "TELKOM";
 
   if (filtered.length === 0){
     wrap.innerHTML = '<div class="empty-state">Tidak ada data untuk kombinasi filter ini. Kemungkinan sheet ini memang belum punya baris data untuk Witel/Warehouse yang dipilih.</div>';
@@ -862,41 +845,42 @@ function renderBrandTable(brand, wrapId){
     byWitel[r.Witel].push(r);
   });
 
-  let bodyHtml = "";
-  witelOrder.forEach((witel, wi) => {
+  let html = "";
+  witelOrder.forEach(witel => {
     const rows = byWitel[witel];
-    rows.forEach((r, idx) => {
-      bodyHtml += `<tr class="witel-row ${wi%2? 'alt':''}">`;
-      if (idx===0) bodyHtml += `<td class="label-witel" rowspan="${rows.length+1}">${witel}</td>`;
-      bodyHtml += `<td class="label-wh">${r.Warehouse}</td>`;
-      cols.forEach(c => bodyHtml += `<td class="num">${r[c.key]||0}</td>`);
-      bodyHtml += `</tr>`;
+    html += `<div class="witel-section"><div class="witel-heading">${witel}</div><div class="card-grid">`;
+
+    rows.forEach(r => {
+      html += `
+        <div class="stat-card">
+          <div class="stat-card-title">${r.Warehouse}</div>
+          <div class="stat-tiles">${buildStatTilesHtml(summaryCols, r)}</div>
+        </div>`;
     });
+
     const subtotal = sumRows(rows, cols);
-    bodyHtml += `<tr class="total-region"><td class="label-wh">TOTAL ${witel}</td>`;
-    cols.forEach(c => bodyHtml += `<td class="num">${subtotal[c.key]}</td>`);
-    bodyHtml += `</tr>`;
+    html += `
+      <div class="stat-card total-card">
+        <div class="stat-card-title">TOTAL ${witel}</div>
+        <div class="stat-tiles">${buildStatTilesHtml(summaryCols, subtotal)}</div>
+      </div>`;
+
+    html += `</div></div>`;
   });
 
   const grand = sumRows(filtered, cols);
-  bodyHtml += `<tr class="grand-total"><td colspan="2">TOTAL KESELURUHAN</td>`;
-  cols.forEach(c => bodyHtml += `<td class="num">${grand[c.key]}</td>`);
-  bodyHtml += `</tr>`;
+  html += `
+    <div class="grand-total-card">
+      <div class="stat-card-title">TOTAL KESELURUHAN</div>
+      <div class="stat-tiles">${buildStatTilesHtml(summaryCols, grand)}</div>
+    </div>`;
 
-  const headerHtml = brand === "Telkomsel"
-    ? buildHeaderHtmlTelkomsel(brandLabel)
-    : buildHeaderHtmlTelkom(brandLabel);
-
-  wrap.innerHTML = `
-    <table>
-      ${headerHtml}
-      <tbody>${bodyHtml}</tbody>
-    </table>`;
+  wrap.innerHTML = html;
 }
 
 function renderAll(){
-  renderBrandTable("Telkomsel", "wrapTelkomsel");
-  renderBrandTable("Telkom", "wrapTelkom");
+  renderBrandCards("Telkomsel", "wrapTelkomsel");
+  renderBrandCards("Telkom", "wrapTelkom");
 }
 
 /* =========================================================================
