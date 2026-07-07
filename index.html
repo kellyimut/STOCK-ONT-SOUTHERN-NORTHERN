@@ -767,9 +767,14 @@ function applyFilters(rows){
   const witel = nilaiFilter(document.getElementById("filterWitel"));
   const warehouse = nilaiFilter(document.getElementById("filterWarehouse"));
 
+  // Nama warehouse Telkomsel & Telkom beda skema penamaan (tidak pernah sama persis).
+  // Jadi filter Warehouse cuma diterapkan pada brand yang memang punya nama warehouse
+  // itu; brand yang lain tetap ditampilkan mengikuti filter Witel saja.
+  const warehouseAdaDiBrandIni = warehouse ? rows.some(r => r.Warehouse === warehouse) : false;
+
   return rows.filter(r => {
     if (witel && r.Witel !== witel) return false;
-    if (warehouse && r.Warehouse !== warehouse) return false;
+    if (warehouse && warehouseAdaDiBrandIni && r.Warehouse !== warehouse) return false;
     return true;
   });
 }
