@@ -861,9 +861,32 @@ function renderBrandCards(brand, wrapId){
   wrap.innerHTML = html;
 }
 
+// Isi ulang daftar Warehouse supaya cuma menampilkan warehouse yang cocok
+// dengan Witel (dan Stok ONT/brand) yang sedang dipilih.
+function refreshWarehouseOptions(brandFilter){
+  const witel = nilaiFilter(document.getElementById("filterWitel"));
+  const source = brandFilter ? rawData[brandFilter] : getAllRows();
+
+  const warehouses = new Set();
+  source.forEach(r => {
+    if (witel && r.Witel !== witel) return;
+    if (r.Warehouse) warehouses.add(r.Warehouse);
+  });
+
+  fillDatalist("filterWarehouseList", [...warehouses].sort(), v => v);
+
+  // Kalau warehouse yang lagi dipilih ternyata sudah tidak cocok dengan
+  // Witel/Stok ONT yang baru, kosongkan supaya tidak nyangkut filter usang.
+  const whInput = document.getElementById("filterWarehouse");
+  const currentWh = nilaiFilter(whInput);
+  if (currentWh && !warehouses.has(currentWh)) whInput.value = "";
+}
+
 function renderAll(){
   const brandText = nilaiFilter(document.getElementById("filterBrand")).toUpperCase();
   const brandFilter = brandText === "TELKOMSEL" ? "Telkomsel" : brandText === "TELKOM" ? "Telkom" : "";
+
+  refreshWarehouseOptions(brandFilter);
 
   const panelTelkomsel = document.querySelector(".panel.telkomsel");
   const panelTelkom = document.querySelector(".panel.telkom");
