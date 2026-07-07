@@ -971,6 +971,20 @@ document.getElementById("resetBtn").addEventListener("click", () => {
   const el = document.getElementById(id);
   el.addEventListener("input", renderAll);
   el.addEventListener("change", renderAll);
+
+  // Saat kolom di-klik/fokus, kosongkan sementara isinya supaya browser
+  // menampilkan SEMUA pilihan di datalist (bukan cuma yang cocok dgn teks sekarang).
+  // Kalau user klik keluar tanpa memilih apa-apa, nilai semula dikembalikan.
+  el.addEventListener("focus", () => {
+    el.dataset.prevValue = el.value;
+    el.value = "";
+  });
+  el.addEventListener("blur", () => {
+    if (el.value === "" && el.dataset.prevValue){
+      el.value = el.dataset.prevValue;
+    }
+    delete el.dataset.prevValue;
+  });
 });
 
 loadAllData();
