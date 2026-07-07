@@ -452,25 +452,20 @@ function aggregateTelkomselRaw(rawRows){
 /* =========================================================================
    AGREGASI DATA MENTAH KHUSUS TELKOM
 
-   PENTING: sheet REKAP TELKOM ternyata punya struktur kolom BEDA dari
-   REKAP TELKOMSEL. Berdasarkan screenshot yang dikirim, urutannya:
+   Struktur kolom REKAP TELKOM (dikonfirmasi dari screenshot terbaru):
    0 REGION | 1 BRANCH(=Witel) | 2 NAMA WH(=Warehouse) | 3 STATUS STOCK
-   4 JENIS (nilai: ONT / STB / ADD ON / AP / AKSESORIS AP -- ini yg jadi
-     kategori utama, beda dari REKAP TELKOMSEL yg punya ITEM GROUP terpisah)
-   5 MERK (brand: ZTE/HUAWEI/FIBERHOME/POE/HKM/dst)
-   6 TYPE (kode produk, mis. "ONT_ZTE_F670_V2.0", "WMSL_ONT_FIBERHOME_...")
-   7 JUMLAH NTE (qty)
-   8 KETERANGAN
-   9 TANGGAL (format campur: "07-Jul-26" atau "7 Juli 2026")
+   4 JENIS | 5 MERK | 6 TYPE | 7 JUMLAH NTE | 8 SEGMENTASI | 9 TANGGAL
+   10 FLAGGING GUDANG | 11 KATEGORI | 12 KET
 
-   STATUS STOCK di sheet ini pakai istilah "NTE BARU" (=NEW) dan
-   "REFURBISHED" (=REFURBISH), bukan "NEW"/"REFURBISH" polos.
+   STATUS STOCK pakai istilah "NTE BARU"(=NEW) / "REFURBISHED"(=REFURBISH).
 
-   BELUM PASTI: cara membedakan ONT PREMIUM vs RETAIL vs BIG ONT.
-   Sheet ini TIDAK punya kolom terpisah untuk itu (JENIS cuma "ONT" polos).
-   Sementara semua ONT dianggap RETAIL supaya angka tidak hilang -- perlu
-   dikonfirmasi ke pemilik data bagaimana cara membedakan ketiganya
-   (misalnya lewat kode awalan di TYPE seperti "WMSL_").
+   Kategori ONT (PREMIUM/RETAIL/BIG ONT) diambil dari kolom KATEGORI (bukan
+   ditebak dari TYPE lagi), sesuai instruksi pemilik data. Nilai KATEGORI yang
+   pernah terlihat: "ADD ON", "ACC AP", "SMOOA", "ONT SINGLE BAND",
+   "ONT DUAL BAND" -- kemungkinan ada juga "ONT PREMIUM"/"ONT RETAIL"/
+   "ONT BIG ONT" di baris lain. Karena "ONT SINGLE BAND"/"ONT DUAL BAND"
+   belum jelas harus masuk kolom Premium/Retail/BigONT yang mana, sementara
+   ini di-fallback ke RETAIL. Kalau ini salah, tolong dikonfirmasi.
    ========================================================================= */
 const MONTH_ABBR_EN = { jan:1, feb:2, mar:3, apr:4, may:5, jun:6, jul:7, aug:8, sep:9, oct:10, nov:11, dec:12 };
 
@@ -501,19 +496,30 @@ function normalisasiStatus(raw){
   return null;
 }
 
+// Petakan teks kolom KATEGORI ke salah satu bucket ONT: premium/retail/bigont
+function petakanKategoriOnt(kategori){
+  const k = (kategori || "").toUpperCase();
+  if (k.indexOf("PREMIUM") !== -1) return "premium";
+  if (k.indexOf("BIG ONT") !== -1 || k.indexOf("BIGONT") !== -1) return "bigont";
+  if (k.indexOf("RETAIL") !== -1) return "retail";
+  // Belum ada kepastian pemetaan utk istilah lama ini -> sementara ke RETAIL
+  if (k.indexOf("DUAL BAND") !== -1 || k.indexOf("SINGLE BAND") !== -1) return "retail";
+  return null;
+}
+
 function aggregateTelkomRaw(rawRows){
   const map = {};
 
   rawRows.forEach(cols => {
-    if (!cols || cols.length < 8) return;
+    if (!cols || cols.length < 12) return;
     const branch = normSpace(cols[1]);
     const wh = normSpace(cols[2]);
     const statusKey = normalisasiStatus(cols[3]);
-    const jenis = (cols[4] || "").trim().toUpperCase();   // ONT / STB / ADD ON / AP / AKSESORIS AP
-    const brand = (cols[5] || "").trim().toUpperCase();   // MERK
-    const type = (cols[6] || "").trim().toUpperCase();    // TYPE
-    const qty = parseFloat(cols[7]) || 0;                 // JUMLAH NTE
+    const jenis = (cols[4] || "").trim().toUpperCase();     // ONT / STB / ADD ON / AP / AKSESORIS AP
+    const brand = (cols[5] || "").trim().toUpperCase();     // MERK
+    const qty = parseFloat(cols[7]) || 0;                   // JUMLAH NTE
     const tglIso = parseFleksibelTanggal(cols[9]);
+    const kategori = (cols[11] || "").trim().toUpperCase(); // KATEGORI
 
     if (!branch || !wh) return;
     if (!statusKey) return; // skip DISMANTLING & status lain yg tidak dikenal
@@ -526,10 +532,8 @@ function aggregateTelkomRaw(rawRows){
     const isNew = statusKey === "new";
 
     if (jenis === "ONT"){
-      // TODO: bedakan PREMIUM/RETAIL/BIG ONT kalau sudah dikonfirmasi aturannya.
-      // Sementara semua ONT masuk RETAIL supaya angkanya tidak hilang.
-      let cat = "retail";
-      if (type.indexOf("WMSL") !== -1) cat = "bigont";
+      const cat = petakanKategoriOnt(kategori);
+      if (!cat) return; // KATEGORI tidak dikenali, lewati
 
       let brandKey = null;
       if (brand === "ZTE") brandKey = "zte";
@@ -544,10 +548,10 @@ function aggregateTelkomRaw(rawRows){
       const key = `stb_${isNew ? "new" : "ref"}_zte`;
       target[key] += qty;
 
-    } else if (jenis === "AP" || jenis === "AKSESORIS AP"){
+    } else if (jenis === "AP" || jenis === "AKSESORIS AP" || kategori === "ACC AP"){
       target.access_point += qty;
 
-    } else if (jenis === "ADD ON"){
+    } else if (jenis === "ADD ON" || kategori === "ADD ON"){
       target.add_on += qty;
     }
   });
