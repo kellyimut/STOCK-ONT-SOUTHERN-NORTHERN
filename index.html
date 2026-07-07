@@ -278,21 +278,6 @@
     <datalist id="filterWitelList"></datalist>
   </div>
   <div class="filter-group">
-    <label>Tahun</label>
-    <input type="text" id="filterTahun" list="filterTahunList" placeholder="Semua" autocomplete="off">
-    <datalist id="filterTahunList"></datalist>
-  </div>
-  <div class="filter-group">
-    <label>Bulan</label>
-    <input type="text" id="filterBulan" list="filterBulanList" placeholder="Semua" autocomplete="off">
-    <datalist id="filterBulanList"></datalist>
-  </div>
-  <div class="filter-group">
-    <label>Hari / Tanggal</label>
-    <input type="text" id="filterHari" list="filterHariList" placeholder="Semua" autocomplete="off">
-    <datalist id="filterHariList"></datalist>
-  </div>
-  <div class="filter-group">
     <label>Warehouse</label>
     <input type="text" id="filterWarehouse" list="filterWarehouseList" placeholder="Semua" autocomplete="off">
     <datalist id="filterWarehouseList"></datalist>
@@ -387,7 +372,6 @@ const TELKOM_COLUMNS = [
 
 const COLUMN_CONFIG = { Telkomsel: TELKOMSEL_COLUMNS, Telkom: TELKOM_COLUMNS };
 
-const MONTH_NAMES = ["Januari","Februari","Maret","April","Mei","Juni","Juli","Agustus","September","Oktober","November","Desember"];
 const BULAN_ID = {
   "januari":1,"februari":2,"maret":3,"april":4,"mei":5,"juni":6,
   "juli":7,"agustus":8,"september":9,"oktober":10,"november":11,"desember":12
@@ -750,27 +734,15 @@ function getAllRows(){
   return [...rawData.Telkomsel.map(r=>({...r,_brand:"Telkomsel"})), ...rawData.Telkom.map(r=>({...r,_brand:"Telkom"}))];
 }
 
-function parseDate(tgl){
-  // Expect YYYY-MM-DD
-  const parts = String(tgl).split("-");
-  if (parts.length !== 3) return null;
-  return { y: parts[0], m: parseInt(parts[1],10), d: parseInt(parts[2],10) };
-}
-
 function populateFilters(){
   const all = getAllRows();
-  const years = new Set(), months = new Set(), days = new Set(), witels = new Set(), warehouses = new Set();
+  const witels = new Set(), warehouses = new Set();
 
   all.forEach(r => {
-    const dt = parseDate(r.Tanggal);
-    if (dt){ years.add(dt.y); months.add(dt.m); days.add(dt.d); }
     if (r.Witel) witels.add(r.Witel);
     if (r.Warehouse) warehouses.add(r.Warehouse);
   });
 
-  fillDatalist("filterTahunList", [...years].sort(), v => String(v));
-  fillDatalist("filterBulanList", [...months].sort((a,b)=>a-b), v => MONTH_NAMES[v-1]);
-  fillDatalist("filterHariList", [...days].sort((a,b)=>a-b), v => String(v).padStart(2,"0"));
   fillDatalist("filterWitelList", [...witels].sort(), v => v);
   fillDatalist("filterWarehouseList", [...warehouses].sort(), v => v);
 }
@@ -792,23 +764,10 @@ function nilaiFilter(el){
 }
 
 function applyFilters(rows){
-  const tahun = nilaiFilter(document.getElementById("filterTahun"));
-  const bulanText = nilaiFilter(document.getElementById("filterBulan"));
-  const hariText = nilaiFilter(document.getElementById("filterHari"));
   const witel = nilaiFilter(document.getElementById("filterWitel"));
   const warehouse = nilaiFilter(document.getElementById("filterWarehouse"));
 
-  // "Bulan" & "Hari" diketik sebagai teks (mis. "Juli", "07") -> ubah balik ke angka utk dibandingkan
-  const bulanIdx = bulanText
-    ? MONTH_NAMES.findIndex(m => m.toLowerCase() === bulanText.toLowerCase()) + 1
-    : 0;
-  const hariNum = hariText ? parseInt(hariText, 10) : 0;
-
   return rows.filter(r => {
-    const dt = parseDate(r.Tanggal);
-    if (tahun && (!dt || String(dt.y) !== tahun)) return false;
-    if (bulanIdx && (!dt || dt.m !== bulanIdx)) return false;
-    if (hariNum && (!dt || dt.d !== hariNum)) return false;
     if (witel && r.Witel !== witel) return false;
     if (warehouse && r.Warehouse !== warehouse) return false;
     return true;
@@ -971,10 +930,10 @@ initThemePicker();
 
 document.getElementById("refreshBtn").addEventListener("click", loadAllData);
 document.getElementById("resetBtn").addEventListener("click", () => {
-  ["filterBrand","filterTahun","filterBulan","filterHari","filterWitel","filterWarehouse"].forEach(id => document.getElementById(id).value = "");
+  ["filterBrand","filterWitel","filterWarehouse"].forEach(id => document.getElementById(id).value = "");
   renderAll();
 });
-["filterBrand","filterTahun","filterBulan","filterHari","filterWitel","filterWarehouse"].forEach(id => {
+["filterBrand","filterWitel","filterWarehouse"].forEach(id => {
   const el = document.getElementById(id);
   el.addEventListener("input", renderAll);
   el.addEventListener("change", renderAll);
