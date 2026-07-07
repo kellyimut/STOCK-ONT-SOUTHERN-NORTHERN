@@ -528,9 +528,9 @@ function normalisasiStatus(raw){
 // Tidak ada kategori literal "RETAIL" -- istilah DUAL BAND/SINGLE BAND (lama)
 // dipetakan ke RETAIL, sudah dikonfirmasi cocok dgn angka laporan Excel.
 const KATEGORI_PREMIUM = ["ONT PREMIUM","ONT PREMIUM WMSL","PREMIUM","PREMIUM WMSL"];
-const KATEGORI_BIGONT = ["BIG ONT","ONT WMSL","ONT ENTERPRISE"];
+const KATEGORI_BIGONT = ["BIG ONT","ONT WMSL","ONT ENTERPRISE","ONT MOBILE"];
 const KATEGORI_RETAIL = ["ONT DUAL BAND","DUAL BAND","DUAL BAND VULA","ONT SINGLE BAND",
-  "ONT SINGLEBAND","SINGLE BAND NOT OPEN","SINGLE BAND OPEN","ONT VULLA","ONT MOBILE"];
+  "ONT SINGLEBAND","SINGLE BAND NOT OPEN","SINGLE BAND OPEN","ONT VULLA"];
 
 function petakanKategoriOnt(kategori){
   const k = normSpace(kategori).toUpperCase();
