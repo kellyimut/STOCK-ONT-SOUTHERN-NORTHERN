@@ -278,9 +278,14 @@
     <datalist id="filterWitelList"></datalist>
   </div>
   <div class="filter-group">
-    <label>Warehouse</label>
-    <input type="text" id="filterWarehouse" list="filterWarehouseList" placeholder="Semua" autocomplete="off">
-    <datalist id="filterWarehouseList"></datalist>
+    <label>Warehouse Telkomsel</label>
+    <input type="text" id="filterWarehouseTelkomsel" list="filterWarehouseTelkomselList" placeholder="Semua" autocomplete="off">
+    <datalist id="filterWarehouseTelkomselList"></datalist>
+  </div>
+  <div class="filter-group">
+    <label>Warehouse Telkom</label>
+    <input type="text" id="filterWarehouseTelkom" list="filterWarehouseTelkomList" placeholder="Semua" autocomplete="off">
+    <datalist id="filterWarehouseTelkomList"></datalist>
   </div>
   <button class="reset-btn" id="resetBtn">Reset Filter</button>
 </div>
@@ -736,15 +741,11 @@ function getAllRows(){
 
 function populateFilters(){
   const all = getAllRows();
-  const witels = new Set(), warehouses = new Set();
+  const witels = new Set();
 
-  all.forEach(r => {
-    if (r.Witel) witels.add(r.Witel);
-    if (r.Warehouse) warehouses.add(r.Warehouse);
-  });
+  all.forEach(r => { if (r.Witel) witels.add(r.Witel); });
 
   fillDatalist("filterWitelList", [...witels].sort(), v => v);
-  fillDatalist("filterWarehouseList", [...warehouses].sort(), v => v);
 }
 
 function fillDatalist(listId, values, labelFn){
@@ -763,18 +764,14 @@ function nilaiFilter(el){
   return v.toLowerCase() === "semua" ? "" : v;
 }
 
-function applyFilters(rows){
+function applyFilters(rows, brand){
   const witel = nilaiFilter(document.getElementById("filterWitel"));
-  const warehouse = nilaiFilter(document.getElementById("filterWarehouse"));
-
-  // Nama warehouse Telkomsel & Telkom beda skema penamaan (tidak pernah sama persis).
-  // Jadi filter Warehouse cuma diterapkan pada brand yang memang punya nama warehouse
-  // itu; brand yang lain tetap ditampilkan mengikuti filter Witel saja.
-  const warehouseAdaDiBrandIni = warehouse ? rows.some(r => r.Warehouse === warehouse) : false;
+  const whId = brand === "Telkomsel" ? "filterWarehouseTelkomsel" : "filterWarehouseTelkom";
+  const warehouse = nilaiFilter(document.getElementById(whId));
 
   return rows.filter(r => {
     if (witel && r.Witel !== witel) return false;
-    if (warehouse && warehouseAdaDiBrandIni && r.Warehouse !== warehouse) return false;
+    if (warehouse && r.Warehouse !== warehouse) return false;
     return true;
   });
 }
@@ -816,7 +813,7 @@ function buildStatTilesHtml(summaryCols, dataObj){
 function renderBrandCards(brand, wrapId){
   const cols = COLUMN_CONFIG[brand];
   const summaryCols = SUMMARY_CONFIG[brand];
-  const filtered = applyFilters(rawData[brand].map(r=>({...r,_brand:brand})));
+  const filtered = applyFilters(rawData[brand].map(r=>({...r,_brand:brand})), brand);
 
   const wrap = document.getElementById(wrapId);
 
@@ -868,30 +865,37 @@ function renderBrandCards(brand, wrapId){
 
 // Isi ulang daftar Warehouse supaya cuma menampilkan warehouse yang cocok
 // dengan Witel (dan Stok ONT/brand) yang sedang dipilih.
-function refreshWarehouseOptions(brandFilter){
+function refreshWarehouseOptions(){
   const witel = nilaiFilter(document.getElementById("filterWitel"));
-  const source = brandFilter ? rawData[brandFilter] : getAllRows();
 
-  const warehouses = new Set();
-  source.forEach(r => {
-    if (witel && r.Witel !== witel) return;
-    if (r.Warehouse) warehouses.add(r.Warehouse);
+  const brandListMap = {
+    Telkomsel: { inputId: "filterWarehouseTelkomsel", listId: "filterWarehouseTelkomselList" },
+    Telkom: { inputId: "filterWarehouseTelkom", listId: "filterWarehouseTelkomList" }
+  };
+
+  Object.keys(brandListMap).forEach(brand => {
+    const { inputId, listId } = brandListMap[brand];
+    const warehouses = new Set();
+    rawData[brand].forEach(r => {
+      if (witel && r.Witel !== witel) return;
+      if (r.Warehouse) warehouses.add(r.Warehouse);
+    });
+
+    fillDatalist(listId, [...warehouses].sort(), v => v);
+
+    // Kalau warehouse yang lagi dipilih ternyata sudah tidak cocok dengan
+    // Witel yang baru, kosongkan supaya tidak nyangkut filter usang.
+    const input = document.getElementById(inputId);
+    const currentWh = nilaiFilter(input);
+    if (currentWh && !warehouses.has(currentWh)) input.value = "";
   });
-
-  fillDatalist("filterWarehouseList", [...warehouses].sort(), v => v);
-
-  // Kalau warehouse yang lagi dipilih ternyata sudah tidak cocok dengan
-  // Witel/Stok ONT yang baru, kosongkan supaya tidak nyangkut filter usang.
-  const whInput = document.getElementById("filterWarehouse");
-  const currentWh = nilaiFilter(whInput);
-  if (currentWh && !warehouses.has(currentWh)) whInput.value = "";
 }
 
 function renderAll(){
   const brandText = nilaiFilter(document.getElementById("filterBrand")).toUpperCase();
   const brandFilter = brandText === "TELKOMSEL" ? "Telkomsel" : brandText === "TELKOM" ? "Telkom" : "";
 
-  refreshWarehouseOptions(brandFilter);
+  refreshWarehouseOptions();
 
   const panelTelkomsel = document.querySelector(".panel.telkomsel");
   const panelTelkom = document.querySelector(".panel.telkom");
@@ -958,10 +962,10 @@ initThemePicker();
 
 document.getElementById("refreshBtn").addEventListener("click", loadAllData);
 document.getElementById("resetBtn").addEventListener("click", () => {
-  ["filterBrand","filterWitel","filterWarehouse"].forEach(id => document.getElementById(id).value = "");
+  ["filterBrand","filterWitel","filterWarehouseTelkomsel","filterWarehouseTelkom"].forEach(id => document.getElementById(id).value = "");
   renderAll();
 });
-["filterBrand","filterWitel","filterWarehouse"].forEach(id => {
+["filterBrand","filterWitel","filterWarehouseTelkomsel","filterWarehouseTelkom"].forEach(id => {
   const el = document.getElementById(id);
   el.addEventListener("input", renderAll);
   el.addEventListener("change", renderAll);
