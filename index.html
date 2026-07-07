@@ -267,6 +267,7 @@
     <label>Stok ONT</label>
     <input type="text" id="filterBrand" list="filterBrandList" placeholder="Semua" autocomplete="off">
     <datalist id="filterBrandList">
+      <option value="Semua"></option>
       <option value="TELKOMSEL"></option>
       <option value="TELKOM"></option>
     </datalist>
@@ -776,7 +777,7 @@ function populateFilters(){
 
 function fillDatalist(listId, values, labelFn){
   const dl = document.getElementById(listId);
-  dl.innerHTML = "";
+  dl.innerHTML = '<option value="Semua"></option>';
   values.forEach(v => {
     const opt = document.createElement("option");
     opt.value = labelFn(v);
@@ -784,12 +785,18 @@ function fillDatalist(listId, values, labelFn){
   });
 }
 
+// Anggap "Semua" (apapun huruf besar/kecilnya) sama dengan filter kosong
+function nilaiFilter(el){
+  const v = el.value.trim();
+  return v.toLowerCase() === "semua" ? "" : v;
+}
+
 function applyFilters(rows){
-  const tahun = document.getElementById("filterTahun").value.trim();
-  const bulanText = document.getElementById("filterBulan").value.trim();
-  const hariText = document.getElementById("filterHari").value.trim();
-  const witel = document.getElementById("filterWitel").value.trim();
-  const warehouse = document.getElementById("filterWarehouse").value.trim();
+  const tahun = nilaiFilter(document.getElementById("filterTahun"));
+  const bulanText = nilaiFilter(document.getElementById("filterBulan"));
+  const hariText = nilaiFilter(document.getElementById("filterHari"));
+  const witel = nilaiFilter(document.getElementById("filterWitel"));
+  const warehouse = nilaiFilter(document.getElementById("filterWarehouse"));
 
   // "Bulan" & "Hari" diketik sebagai teks (mis. "Juli", "07") -> ubah balik ke angka utk dibandingkan
   const bulanIdx = bulanText
@@ -896,7 +903,7 @@ function renderBrandCards(brand, wrapId){
 }
 
 function renderAll(){
-  const brandText = document.getElementById("filterBrand").value.trim().toUpperCase();
+  const brandText = nilaiFilter(document.getElementById("filterBrand")).toUpperCase();
   const brandFilter = brandText === "TELKOMSEL" ? "Telkomsel" : brandText === "TELKOM" ? "Telkom" : "";
 
   const panelTelkomsel = document.querySelector(".panel.telkomsel");
