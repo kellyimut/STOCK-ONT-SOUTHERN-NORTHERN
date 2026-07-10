@@ -253,6 +253,62 @@
   .sidebar-nav-item.active .dot{ opacity:1; }
   .sidebar-nav-item[data-brand="Telkomsel"].active{ border-left-color:#8eaadb; }
   .sidebar-nav-item[data-brand="Telkom"].active{ border-left-color:var(--panel-a); }
+
+  .sidebar-brand-group{
+    display:flex;
+    flex-direction:column;
+  }
+  .sidebar-nav-item .chevron{
+    margin-left:auto;
+    font-size:14px;
+    opacity:.55;
+    transition:transform .2s ease;
+  }
+  .sidebar-brand-group.expanded > .sidebar-nav-item .chevron{
+    transform:rotate(90deg);
+  }
+  .sidebar-witel-list{
+    max-height:0;
+    overflow:hidden;
+    display:flex;
+    flex-direction:column;
+    gap:2px;
+    padding-left:8px;
+    margin-top:2px;
+    transition:max-height .25s ease;
+  }
+  .sidebar-brand-group.expanded .sidebar-witel-list{
+    max-height:340px;
+    overflow-y:auto;
+    padding-bottom:4px;
+  }
+  .sidebar-witel-item{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    width:100%;
+    text-align:left;
+    background:transparent;
+    color:rgba(255,255,255,0.6);
+    border:none;
+    border-left:2px solid transparent;
+    padding:7px 10px 7px 20px;
+    border-radius:5px;
+    font-size:12px;
+    font-weight:600;
+    cursor:pointer;
+    transition:background .15s ease, color .15s ease;
+  }
+  .sidebar-witel-item:hover{
+    background:rgba(255,255,255,0.07);
+    color:white;
+  }
+  .sidebar-witel-item.active{
+    background:rgba(255,255,255,0.12);
+    color:white;
+  }
+  .sidebar-brand-group[data-brand-group="Telkomsel"] .sidebar-witel-item.active{ border-left-color:#8eaadb; }
+  .sidebar-brand-group[data-brand-group="Telkom"] .sidebar-witel-item.active{ border-left-color:var(--panel-a); }
   .main-content{
     flex:1 1 auto;
     min-width:0;
@@ -393,12 +449,22 @@
     <button class="sidebar-nav-item active" data-brand="">
       <span class="dot"></span>Semua
     </button>
-    <button class="sidebar-nav-item" data-brand="Telkomsel">
-      <span class="dot"></span>Telkomsel
-    </button>
-    <button class="sidebar-nav-item" data-brand="Telkom">
-      <span class="dot"></span>Telkom
-    </button>
+
+    <div class="sidebar-brand-group" data-brand-group="Telkomsel">
+      <button class="sidebar-nav-item" data-brand="Telkomsel">
+        <span class="dot"></span>Telkomsel
+        <span class="chevron">&#8250;</span>
+      </button>
+      <div class="sidebar-witel-list" id="witelListTelkomsel"></div>
+    </div>
+
+    <div class="sidebar-brand-group" data-brand-group="Telkom">
+      <button class="sidebar-nav-item" data-brand="Telkom">
+        <span class="dot"></span>Telkom
+        <span class="chevron">&#8250;</span>
+      </button>
+      <div class="sidebar-witel-list" id="witelListTelkom"></div>
+    </div>
   </nav>
 </aside>
 
@@ -420,11 +486,6 @@
 <div id="errorBox"></div>
 
 <div class="filter-bar">
-  <div class="filter-group">
-    <label>Witel</label>
-    <input type="text" id="filterWitel" list="filterWitelList" placeholder="Semua" autocomplete="off">
-    <datalist id="filterWitelList"></datalist>
-  </div>
   <div class="filter-group">
     <label>Warehouse Telkomsel</label>
     <input type="text" id="filterWarehouseTelkomsel" list="filterWarehouseTelkomselList" placeholder="Semua" autocomplete="off">
@@ -891,12 +952,39 @@ function getAllRows(){
 }
 
 function populateFilters(){
-  const all = getAllRows();
-  const witels = new Set();
+  ["Telkomsel","Telkom"].forEach(brand => {
+    const witels = new Set();
+    rawData[brand].forEach(r => { if (r.Witel) witels.add(r.Witel); });
+    renderWitelSidebarList(brand, [...witels].sort());
+  });
+}
 
-  all.forEach(r => { if (r.Witel) witels.add(r.Witel); });
+// Bangun daftar tombol Witel di dalam submenu sidebar untuk 1 brand tertentu.
+function renderWitelSidebarList(brand, witelValues){
+  const container = document.getElementById(`witelList${brand}`);
+  if (!container) return;
 
-  fillDatalist("filterWitelList", [...witels].sort(), v => v);
+  // Kalau Witel yang lagi aktif ternyata sudah tidak ada di data terbaru, reset ke Semua
+  if (currentWitel[brand] && !witelValues.includes(currentWitel[brand])){
+    currentWitel[brand] = "";
+  }
+
+  const items = ["", ...witelValues];
+  container.innerHTML = "";
+  items.forEach(w => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "sidebar-witel-item" + (currentWitel[brand] === w ? " active" : "");
+    btn.textContent = w || "Semua";
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      currentWitel[brand] = w;
+      container.querySelectorAll(".sidebar-witel-item").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      renderAll();
+    });
+    container.appendChild(btn);
+  });
 }
 
 function fillDatalist(listId, values, labelFn){
@@ -916,7 +1004,7 @@ function nilaiFilter(el){
 }
 
 function applyFilters(rows, brand){
-  const witel = nilaiFilter(document.getElementById("filterWitel"));
+  const witel = currentWitel[brand];
   const whId = brand === "Telkomsel" ? "filterWarehouseTelkomsel" : "filterWarehouseTelkom";
   const warehouse = nilaiFilter(document.getElementById(whId));
 
@@ -1017,8 +1105,6 @@ function renderBrandCards(brand, wrapId){
 // Isi ulang daftar Warehouse supaya cuma menampilkan warehouse yang cocok
 // dengan Witel (dan Stok ONT/brand) yang sedang dipilih.
 function refreshWarehouseOptions(){
-  const witel = nilaiFilter(document.getElementById("filterWitel"));
-
   const brandListMap = {
     Telkomsel: { inputId: "filterWarehouseTelkomsel", listId: "filterWarehouseTelkomselList" },
     Telkom: { inputId: "filterWarehouseTelkom", listId: "filterWarehouseTelkomList" }
@@ -1026,6 +1112,7 @@ function refreshWarehouseOptions(){
 
   Object.keys(brandListMap).forEach(brand => {
     const { inputId, listId } = brandListMap[brand];
+    const witel = currentWitel[brand];
     const warehouses = new Set();
     rawData[brand].forEach(r => {
       if (witel && r.Witel !== witel) return;
@@ -1114,13 +1201,20 @@ initThemePicker();
    SIDEBAR PILIHAN STOK ONT (Semua / Telkomsel / Telkom)
    ========================================================================= */
 let currentSidebarBrand = ""; // "" = Semua
+const currentWitel = { Telkomsel: "", Telkom: "" }; // Witel aktif per brand
 
 function initSidebarNav(){
   const nav = document.getElementById("sidebarNav");
   nav.querySelectorAll(".sidebar-nav-item").forEach(btn => {
     btn.addEventListener("click", () => {
-      currentSidebarBrand = btn.dataset.brand || "";
+      const brand = btn.dataset.brand || "";
+      currentSidebarBrand = brand;
+
       nav.querySelectorAll(".sidebar-nav-item").forEach(b => b.classList.toggle("active", b === btn));
+      nav.querySelectorAll(".sidebar-brand-group").forEach(group => {
+        group.classList.toggle("expanded", group.dataset.brandGroup === brand);
+      });
+
       renderAll();
     });
   });
@@ -1129,12 +1223,16 @@ initSidebarNav();
 
 document.getElementById("refreshBtn").addEventListener("click", loadAllData);
 document.getElementById("resetBtn").addEventListener("click", () => {
-  ["filterWitel","filterWarehouseTelkomsel","filterWarehouseTelkom"].forEach(id => document.getElementById(id).value = "");
+  ["filterWarehouseTelkomsel","filterWarehouseTelkom"].forEach(id => document.getElementById(id).value = "");
   currentSidebarBrand = "";
+  currentWitel.Telkomsel = "";
+  currentWitel.Telkom = "";
   document.querySelectorAll("#sidebarNav .sidebar-nav-item").forEach(b => b.classList.toggle("active", b.dataset.brand === ""));
+  document.querySelectorAll("#sidebarNav .sidebar-brand-group").forEach(g => g.classList.remove("expanded"));
+  populateFilters();
   renderAll();
 });
-["filterWitel","filterWarehouseTelkomsel","filterWarehouseTelkom"].forEach(id => {
+["filterWarehouseTelkomsel","filterWarehouseTelkom"].forEach(id => {
   const el = document.getElementById(id);
   el.addEventListener("input", renderAll);
   el.addEventListener("change", renderAll);
