@@ -455,9 +455,95 @@
     color:#777;
     margin-top:6px;
   }
+
+  .loading-overlay{
+    display:none;
+    position:fixed;
+    inset:0;
+    z-index:9999;
+    background:rgba(10,16,28,0.55);
+    backdrop-filter:blur(3px);
+    align-items:center;
+    justify-content:center;
+  }
+  .loading-overlay.active{ display:flex; }
+  .loading-card{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:22px;
+    padding:36px 44px;
+    border-radius:18px;
+    background:linear-gradient(160deg, rgba(255,255,255,0.98), rgba(255,255,255,0.94));
+    box-shadow:0 20px 60px rgba(0,0,0,0.4);
+  }
+  .loading-logo-ring{
+    position:relative;
+    width:140px;
+    height:140px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    isolation:isolate;
+  }
+  .loading-logo-ring::before{
+    content:"";
+    position:absolute;
+    inset:0;
+    border-radius:50%;
+    background:conic-gradient(from 0deg, var(--navy) 0%, var(--panel-a) 25%, transparent 50%, var(--navy) 75%, var(--panel-a) 100%);
+    animation:loadingSpin 1.4s linear infinite;
+    z-index:-1;
+  }
+  .loading-logo-ring::after{
+    content:"";
+    position:absolute;
+    inset:6px;
+    border-radius:50%;
+    background:white;
+    z-index:-1;
+  }
+  .loading-logo-ring img{
+    width:78%;
+    height:auto;
+    animation:loadingPulse 1.4s ease-in-out infinite;
+  }
+  @keyframes loadingSpin{
+    to{ transform:rotate(360deg); }
+  }
+  @keyframes loadingPulse{
+    0%, 100%{ transform:scale(1); opacity:1; }
+    50%{ transform:scale(0.92); opacity:.8; }
+  }
+  .loading-text{
+    font-size:14px;
+    font-weight:700;
+    color:var(--navy-dark);
+    letter-spacing:.3px;
+  }
+  .loading-dots span{
+    animation:loadingDots 1.2s infinite;
+    opacity:0;
+  }
+  .loading-dots span:nth-child(2){ animation-delay:.2s; }
+  .loading-dots span:nth-child(3){ animation-delay:.4s; }
+  @keyframes loadingDots{
+    0%{ opacity:0; }
+    30%{ opacity:1; }
+    60%, 100%{ opacity:0; }
+  }
 </style>
 </head>
 <body>
+
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="loading-card">
+    <div class="loading-logo-ring">
+      <img id="loadingLogoImg" src="" alt="Memuat data">
+    </div>
+    <div class="loading-text">Mengambil data terbaru<span class="loading-dots"><span>.</span><span>.</span><span>.</span></span></div>
+  </div>
+</div>
 
 <div class="app-layout">
 
@@ -927,47 +1013,60 @@ async function fetchSheet(url){
 }
 
 async function loadAllData(){
-  document.getElementById("errorBox").innerHTML = "";
-  document.getElementById("lastUpdated").textContent = "Memuat data...";
-  let usedDemo = false;
+  showLoadingOverlay();
+  const startedAt = Date.now();
+  try{
+    document.getElementById("errorBox").innerHTML = "";
+    document.getElementById("lastUpdated").textContent = "Memuat data...";
+    let usedDemo = false;
 
-  for (const brand of ["Telkomsel","Telkom"]){
-    const url = SHEET_URLS[brand];
-    const cols = COLUMN_CONFIG[brand];
-    if (!url || url.includes("GANTI_GID")){
-      rawData[brand] = buildDemoRows(brand === "Telkomsel" ? 1 : 0.7, cols);
-      usedDemo = true;
-      continue;
+    for (const brand of ["Telkomsel","Telkom"]){
+      const url = SHEET_URLS[brand];
+      const cols = COLUMN_CONFIG[brand];
+      if (!url || url.includes("GANTI_GID")){
+        rawData[brand] = buildDemoRows(brand === "Telkomsel" ? 1 : 0.7, cols);
+        usedDemo = true;
+        continue;
+      }
+      try{
+        const rawRows = await fetchSheet(url);
+        // baris pertama = header kolom, dilewati; sisanya diagregasi dari data mentah
+        const dataRows = rawRows.slice(1);
+        rawData[brand] = brand === "Telkomsel"
+          ? aggregateTelkomselRaw(dataRows)
+          : aggregateTelkomRaw(dataRows);
+      }catch(e){
+        document.getElementById("errorBox").innerHTML =
+          `<div class="error-state">Gagal mengambil data ${brand} dari Google Sheets. Menampilkan data contoh sementara. (${e})</div>`;
+        rawData[brand] = buildDemoRows(brand === "Telkomsel" ? 1 : 0.7, cols);
+        usedDemo = true;
+      }
     }
-    try{
-      const rawRows = await fetchSheet(url);
-      // baris pertama = header kolom, dilewati; sisanya diagregasi dari data mentah
-      const dataRows = rawRows.slice(1);
-      rawData[brand] = brand === "Telkomsel"
-        ? aggregateTelkomselRaw(dataRows)
-        : aggregateTelkomRaw(dataRows);
-    }catch(e){
-      document.getElementById("errorBox").innerHTML =
-        `<div class="error-state">Gagal mengambil data ${brand} dari Google Sheets. Menampilkan data contoh sementara. (${e})</div>`;
-      rawData[brand] = buildDemoRows(brand === "Telkomsel" ? 1 : 0.7, cols);
-      usedDemo = true;
+
+    if (usedDemo){
+      const note = document.createElement("div");
+      note.className = "error-state";
+      note.style.background = "#fff6da";
+      note.style.color = "#7a5c00";
+      note.textContent = "Menampilkan DATA CONTOH karena GID sheet REKAP TELKOM belum diisi. Ganti GANTI_GID_TELKOM di kode dengan gid tab REKAP TELKOM.";
+      document.getElementById("errorBox").appendChild(note);
     }
+
+    const now = new Date();
+    document.getElementById("lastUpdated").textContent = "Update: " + now.toLocaleString("id-ID");
+
+    populateFilters();
+    renderAll();
+  } finally {
+    // Kasih jeda minimum biar animasi loading logo sempat terlihat,
+    // tidak cuma berkedip sekilas kalau koneksinya kebetulan cepat.
+    const elapsed = Date.now() - startedAt;
+    const minDuration = 700;
+    if (elapsed < minDuration){
+      await new Promise(r => setTimeout(r, minDuration - elapsed));
+    }
+    hideLoadingOverlay();
   }
-
-  if (usedDemo){
-    const note = document.createElement("div");
-    note.className = "error-state";
-    note.style.background = "#fff6da";
-    note.style.color = "#7a5c00";
-    note.textContent = "Menampilkan DATA CONTOH karena GID sheet REKAP TELKOM belum diisi. Ganti GANTI_GID_TELKOM di kode dengan gid tab REKAP TELKOM.";
-    document.getElementById("errorBox").appendChild(note);
-  }
-
-  const now = new Date();
-  document.getElementById("lastUpdated").textContent = "Update: " + now.toLocaleString("id-ID");
-
-  populateFilters();
-  renderAll();
 }
 
 function getAllRows(){
@@ -1248,6 +1347,22 @@ function initSidebarNav(){
   });
 }
 initSidebarNav();
+
+/* =========================================================================
+   OVERLAY LOADING (logo TelkomAkses) SAAT REFRESH DATA
+   ========================================================================= */
+function showLoadingOverlay(){
+  document.getElementById("loadingOverlay").classList.add("active");
+}
+function hideLoadingOverlay(){
+  document.getElementById("loadingOverlay").classList.remove("active");
+}
+// Pakai logo yang sama dengan sidebar, supaya base64-nya tidak dobel di HTML
+(function initLoadingLogo(){
+  const sidebarLogoImg = document.querySelector(".sidebar-logo img");
+  const loadingLogoImg = document.getElementById("loadingLogoImg");
+  if (sidebarLogoImg && loadingLogoImg) loadingLogoImg.src = sidebarLogoImg.src;
+})();
 
 document.getElementById("refreshBtn").addEventListener("click", loadAllData);
 document.getElementById("resetBtn").addEventListener("click", () => {
