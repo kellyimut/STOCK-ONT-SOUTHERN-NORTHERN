@@ -486,12 +486,12 @@
 <div id="errorBox"></div>
 
 <div class="filter-bar">
-  <div class="filter-group">
+  <div class="filter-group" id="fgWarehouseTelkomsel">
     <label>Warehouse Telkomsel</label>
     <input type="text" id="filterWarehouseTelkomsel" list="filterWarehouseTelkomselList" placeholder="Semua" autocomplete="off">
     <datalist id="filterWarehouseTelkomselList"></datalist>
   </div>
-  <div class="filter-group">
+  <div class="filter-group" id="fgWarehouseTelkom">
     <label>Warehouse Telkom</label>
     <input type="text" id="filterWarehouseTelkom" list="filterWarehouseTelkomList" placeholder="Semua" autocomplete="off">
     <datalist id="filterWarehouseTelkomList"></datalist>
@@ -1142,6 +1142,11 @@ function renderAll(){
 
   panelTelkomsel.style.display = showTelkomsel ? "" : "none";
   panelTelkom.style.display = showTelkom ? "" : "none";
+
+  // Kolom filter Warehouse ikut menyesuaikan: cuma tampilkan
+  // Warehouse brand yang sedang aktif di sidebar.
+  document.getElementById("fgWarehouseTelkomsel").style.display = showTelkomsel ? "" : "none";
+  document.getElementById("fgWarehouseTelkom").style.display = showTelkom ? "" : "none";
 
   if (showTelkomsel) renderBrandCards("Telkomsel", "wrapTelkomsel");
   if (showTelkom) renderBrandCards("Telkom", "wrapTelkom");
