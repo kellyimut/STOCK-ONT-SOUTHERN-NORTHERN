@@ -456,6 +456,122 @@
     margin-top:6px;
   }
 
+  .stat-tile.clickable{
+    cursor:pointer;
+    border-radius:6px;
+    padding:3px 4px;
+    margin:-3px -4px;
+    transition:background .15s ease;
+  }
+  .stat-tile.clickable:hover{ background:rgba(31,56,100,0.08); }
+  .stat-tile.clickable .stat-label{ text-decoration:underline dotted; text-underline-offset:2px; }
+  .grand-total-card .stat-tile.clickable:hover{ background:rgba(255,255,255,0.18); }
+
+  .breakdown-modal-overlay{
+    display:none;
+    position:fixed;
+    inset:0;
+    z-index:9998;
+    background:rgba(10,16,28,0.55);
+    backdrop-filter:blur(3px);
+    align-items:center;
+    justify-content:center;
+    padding:20px;
+  }
+  .breakdown-modal-overlay.active{ display:flex; }
+  .breakdown-modal-card{
+    background:white;
+    border-radius:14px;
+    width:100%;
+    max-width:380px;
+    max-height:80vh;
+    display:flex;
+    flex-direction:column;
+    box-shadow:0 20px 60px rgba(0,0,0,0.35);
+    overflow:hidden;
+  }
+  .breakdown-modal-head{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    gap:10px;
+    padding:16px 18px 12px 18px;
+    border-bottom:1px solid #eee;
+  }
+  .breakdown-modal-brand{
+    font-size:10px;
+    font-weight:700;
+    color:#888;
+    text-transform:uppercase;
+    letter-spacing:.5px;
+    margin-bottom:2px;
+  }
+  .breakdown-modal-title{
+    font-size:15px;
+    font-weight:800;
+    color:var(--navy-dark);
+  }
+  .breakdown-modal-close{
+    background:#f1f1f1;
+    border:none;
+    border-radius:50%;
+    width:28px;
+    height:28px;
+    font-size:16px;
+    line-height:1;
+    cursor:pointer;
+    color:#555;
+    flex-shrink:0;
+  }
+  .breakdown-modal-close:hover{ background:#e2e2e2; }
+  .breakdown-modal-list{
+    padding:14px 18px;
+    overflow-y:auto;
+    display:flex;
+    flex-direction:column;
+    gap:12px;
+  }
+  .breakdown-row-top{
+    display:flex;
+    justify-content:space-between;
+    align-items:baseline;
+    margin-bottom:4px;
+  }
+  .breakdown-merk{
+    font-size:13px;
+    font-weight:700;
+    color:var(--text);
+  }
+  .breakdown-qty{
+    font-size:15px;
+    font-weight:800;
+    color:var(--navy-dark);
+    font-variant-numeric:tabular-nums;
+  }
+  .breakdown-bar-track{
+    height:6px;
+    background:#eef1f5;
+    border-radius:3px;
+    overflow:hidden;
+  }
+  .breakdown-bar-fill{
+    height:100%;
+    background:linear-gradient(90deg, var(--navy) 0%, var(--panel-a) 100%);
+    border-radius:3px;
+  }
+  .breakdown-modal-footer{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    padding:12px 18px;
+    background:var(--total-row);
+    font-size:13px;
+    font-weight:800;
+    color:var(--navy-dark);
+    text-transform:uppercase;
+    letter-spacing:.4px;
+  }
+
   .loading-overlay{
     display:none;
     position:fixed;
@@ -542,6 +658,23 @@
       <img id="loadingLogoImg" src="" alt="Memuat data">
     </div>
     <div class="loading-text">Mengambil data terbaru<span class="loading-dots"><span>.</span><span>.</span><span>.</span></span></div>
+  </div>
+</div>
+
+<div class="breakdown-modal-overlay" id="breakdownModalOverlay">
+  <div class="breakdown-modal-card">
+    <div class="breakdown-modal-head">
+      <div>
+        <div class="breakdown-modal-brand" id="breakdownModalBrand"></div>
+        <div class="breakdown-modal-title" id="breakdownModalTitle"></div>
+      </div>
+      <button type="button" class="breakdown-modal-close" id="breakdownModalCloseBtn">&times;</button>
+    </div>
+    <div class="breakdown-modal-list" id="breakdownModalList"></div>
+    <div class="breakdown-modal-footer">
+      <span>TOTAL</span>
+      <span id="breakdownModalTotal">0</span>
+    </div>
   </div>
 </div>
 
@@ -1163,13 +1296,136 @@ const TELKOM_SUMMARY = [
 ];
 const SUMMARY_CONFIG = { Telkomsel: TELKOMSEL_SUMMARY, Telkom: TELKOM_SUMMARY };
 
-function buildStatTilesHtml(summaryCols, dataObj){
-  return summaryCols.map(c => `
-    <div class="stat-tile">
-      <div class="stat-label">${c.label}</div>
-      <div class="stat-value">${dataObj[c.key] || 0}</div>
-    </div>`).join("");
+/* =========================================================================
+   BREAKDOWN PER MERK (klik angka kategori -> modal rincian merk)
+   Kunci per merk diambil dari kolom granular yang sudah dihitung di
+   aggregateTelkomselRaw/aggregateTelkomRaw (mis. premium_new_zte, dst),
+   tinggal dijumlah NEW+REFURBISH per merk.
+   ========================================================================= */
+const TELKOMSEL_BREAKDOWN = {
+  premium_total: {
+    ZTE: ["premium_new_zte","premium_ref_zte"],
+    HUAWEI: ["premium_new_huawei","premium_ref_huawei"],
+    FIBERHOME: ["premium_new_fh","premium_ref_fh"]
+  },
+  dualband_total: {
+    ZTE: ["dualband_new_zte","dualband_ref_zte"],
+    HUAWEI: ["dualband_new_huawei","dualband_ref_huawei"],
+    FIBERHOME: ["dualband_new_fh","dualband_ref_fh"]
+  },
+  singleband_total: {
+    ZTE: ["singleband_ref_zte"],
+    HUAWEI: ["singleband_ref_huawei"],
+    FIBERHOME: ["singleband_ref_fh"],
+    NOKIA: ["singleband_ref_nokia"]
+  },
+  stb_total: {
+    ZTE: ["stb_new_zte","stb_ref_zte"]
+  }
+};
+const TELKOM_BREAKDOWN = {
+  premium_total: {
+    ZTE: ["premium_new_zte","premium_ref_zte"],
+    HUAWEI: ["premium_new_huawei","premium_ref_huawei"],
+    FIBERHOME: ["premium_new_fh","premium_ref_fh"]
+  },
+  retail_total: {
+    ZTE: ["retail_new_zte","retail_ref_zte"],
+    HUAWEI: ["retail_new_huawei","retail_ref_huawei"],
+    FIBERHOME: ["retail_new_fh","retail_ref_fh"]
+  },
+  bigont_total: {
+    ZTE: ["bigont_new_zte","bigont_ref_zte"],
+    HUAWEI: ["bigont_new_huawei","bigont_ref_huawei"],
+    FIBERHOME: ["bigont_new_fh","bigont_ref_fh"]
+  },
+  stb_total: {
+    ZTE: ["stb_new_zte","stb_ref_zte"]
+  }
+};
+const BREAKDOWN_CONFIG = { Telkomsel: TELKOMSEL_BREAKDOWN, Telkom: TELKOM_BREAKDOWN };
+
+// Registry sementara: menyimpan data mentah tiap card (per Warehouse/subtotal/
+// grand total) supaya saat salah satu tile-nya diklik, modal breakdown bisa
+// mengambil ulang angka per merk dari kombinasi yang sedang tampil.
+let breakdownRegistry = [];
+
+function buildStatTilesHtml(summaryCols, dataObj, brand, cardTitle){
+  const regIdx = breakdownRegistry.length;
+  breakdownRegistry.push({ dataObj, cardTitle: cardTitle || "" });
+
+  return summaryCols.map(c => {
+    const hasBreakdown = !!(BREAKDOWN_CONFIG[brand] && BREAKDOWN_CONFIG[brand][c.key]);
+    if (!hasBreakdown){
+      return `
+        <div class="stat-tile">
+          <div class="stat-label">${c.label}</div>
+          <div class="stat-value">${dataObj[c.key] || 0}</div>
+        </div>`;
+    }
+    return `
+      <div class="stat-tile clickable" data-reg="${regIdx}" data-brand="${brand}" data-catkey="${c.key}" data-catlabel="${c.label}" title="Klik untuk lihat rincian per merk">
+        <div class="stat-label">${c.label}</div>
+        <div class="stat-value">${dataObj[c.key] || 0}</div>
+      </div>`;
+  }).join("");
 }
+
+function openBreakdownModal(brand, catKey, catLabel, dataObj, cardTitle){
+  const cfg = BREAKDOWN_CONFIG[brand] && BREAKDOWN_CONFIG[brand][catKey];
+  if (!cfg) return;
+
+  const rows = Object.keys(cfg).map(merk => ({
+    merk,
+    total: cfg[merk].reduce((sum, k) => sum + (dataObj[k] || 0), 0)
+  })).sort((a, b) => b.total - a.total);
+
+  const grandTotal = rows.reduce((s, r) => s + r.total, 0);
+
+  document.getElementById("breakdownModalBrand").textContent =
+    (brand === "Telkomsel" ? "STOK ONT TELKOMSEL" : "STOK ONT TELKOM");
+  document.getElementById("breakdownModalTitle").textContent = `${catLabel} — ${cardTitle}`;
+
+  const listEl = document.getElementById("breakdownModalList");
+  if (grandTotal === 0){
+    listEl.innerHTML = '<div class="empty-state">Tidak ada data merk untuk kategori ini.</div>';
+  } else {
+    listEl.innerHTML = rows.map(r => {
+      const pct = grandTotal ? Math.round((r.total / grandTotal) * 100) : 0;
+      return `
+        <div class="breakdown-row">
+          <div class="breakdown-row-top">
+            <span class="breakdown-merk">${r.merk}</span>
+            <span class="breakdown-qty">${r.total}</span>
+          </div>
+          <div class="breakdown-bar-track"><div class="breakdown-bar-fill" style="width:${pct}%"></div></div>
+        </div>`;
+    }).join("");
+  }
+
+  document.getElementById("breakdownModalTotal").textContent = grandTotal;
+  document.getElementById("breakdownModalOverlay").classList.add("active");
+}
+function closeBreakdownModal(){
+  document.getElementById("breakdownModalOverlay").classList.remove("active");
+}
+document.addEventListener("click", (e) => {
+  const tile = e.target.closest(".stat-tile.clickable");
+  if (tile){
+    const entry = breakdownRegistry[parseInt(tile.dataset.reg, 10)];
+    if (entry){
+      openBreakdownModal(tile.dataset.brand, tile.dataset.catkey, tile.dataset.catlabel, entry.dataObj, entry.cardTitle);
+    }
+    return;
+  }
+  // Klik di area gelap luar kartu modal (bukan di dalam kartu) -> tutup modal
+  if (e.target.id === "breakdownModalOverlay" || e.target.id === "breakdownModalCloseBtn"){
+    closeBreakdownModal();
+  }
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") closeBreakdownModal();
+});
 
 function renderBrandCards(brand, wrapId){
   const cols = COLUMN_CONFIG[brand];
@@ -1200,7 +1456,7 @@ function renderBrandCards(brand, wrapId){
       html += `
         <div class="stat-card">
           <div class="stat-card-title">${r.Warehouse}</div>
-          <div class="stat-tiles">${buildStatTilesHtml(summaryCols, r)}</div>
+          <div class="stat-tiles">${buildStatTilesHtml(summaryCols, r, brand, r.Warehouse)}</div>
         </div>`;
     });
 
@@ -1208,7 +1464,7 @@ function renderBrandCards(brand, wrapId){
     html += `
       <div class="stat-card total-card">
         <div class="stat-card-title">TOTAL ${witel}</div>
-        <div class="stat-tiles">${buildStatTilesHtml(summaryCols, subtotal)}</div>
+        <div class="stat-tiles">${buildStatTilesHtml(summaryCols, subtotal, brand, `TOTAL ${witel}`)}</div>
       </div>`;
 
     html += `</div></div>`;
@@ -1218,7 +1474,7 @@ function renderBrandCards(brand, wrapId){
   html += `
     <div class="grand-total-card">
       <div class="stat-card-title">TOTAL KESELURUHAN</div>
-      <div class="stat-tiles">${buildStatTilesHtml(summaryCols, grand)}</div>
+      <div class="stat-tiles">${buildStatTilesHtml(summaryCols, grand, brand, "TOTAL KESELURUHAN")}</div>
     </div>`;
 
   wrap.innerHTML = html;
@@ -1254,6 +1510,7 @@ function refreshWarehouseOptions(){
 function renderAll(){
   const brandFilter = currentSidebarBrand; // "" = Semua, "Telkomsel", atau "Telkom"
 
+  breakdownRegistry = [];
   refreshWarehouseOptions();
 
   const panelTelkomsel = document.querySelector(".panel.telkomsel");
